@@ -257,4 +257,4 @@ Goal detail (`/goals/[goalId]`) below the fold on click:
 
 - Sidebar collapses to a bottom tab bar (Home / Assets / Goals / What If / Timeline) below 768px; Settings moves into an overflow menu.
 - Check-in wizard remains full-screen on mobile but step content stacks single-column; grouped holding tables become card lists instead of table rows.
-- Charts (donut, growth line) resize to full-width single-column on mobile; legends move below the chart instead of beside it.
+- Charts (allocation bar, growth line) resize to full-width single-column on mobile; legends move below the chart instead of beside it.

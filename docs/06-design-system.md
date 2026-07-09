@@ -81,9 +81,10 @@ Used for Asset/Currency Allocation bars and any place holding types are told apa
 | 5 | violet | `#4a3aa7` | `#9085e9` | Retirement |
 | 6 | red | `#e34948` | `#e66767` | Loan (liability) |
 | 7 | magenta | `#e87ba4` | `#d55181` | Credit Card (liability) |
-| 8 | orange | `#eb6834` | `#d95926` | Other Asset / Other Liability |
+| 8 | orange | `#eb6834` | `#d95926` | First per-household **custom** type (creation order) |
+| — | gray | `#898781` | `#898781` | **"Other"** bucket: `other_asset`, `other_liability`, and any custom type past slot 8 |
 
-Custom holding types added via Settings (see `01`, §3.9) take the next unused slot in creation order; beyond 8 categories in one household, the excess folds into "Other" in allocation views specifically (full list still available in the underlying table).
+The seven concrete seed types take slots 1–7. Slot 8 (orange) is held for a household's **first custom type**. Everything else — the two `other_*` seed types and any further custom types — renders in the neutral **de-emphasis gray** as a single "Other" bucket, per the skill's "fold the tail into Other" rule. This is deliberate: it keeps every colored segment mapped to exactly one identity (no two types share a hue) and never invents a 9th categorical hue. The underlying table still lists each type individually even when several share the gray bucket in the chart.
 
 Three light-mode slots (aqua, yellow, magenta) fall below 3:1 contrast on the light surface — per the skill's relief rule, **any allocation bar segment using these slots must carry a visible direct label or legend entry**, never rely on the color alone to identify it.
 

@@ -61,12 +61,16 @@ Defines the app's navigation structure, screen inventory, and how the Five Core 
 
 ### 3.3 Home — `/`
 
-Two states per vision doc, same route:
+The vision doc names two states, but a check-in is resumable, so there are **three** derived states on this one route (matching `checkIn.getStatus` in [08-api-design.md](08-api-design.md) §3.4):
 
-- **A. Check-in Pending** — Welcome message, last snapshot summary card, "Start Financial Check-in" CTA.
+- **A. Check-in Pending (no draft)** — Welcome message, last snapshot summary card, "Start Financial Check-in" CTA.
+- **A′. Check-in In Progress (draft exists)** — same layout as A, but the CTA reads "Resume Check-in" and deep-links to the draft's last step.
 - **B. Check-in Completed (this month)** — Dashboard: Net Worth headline, change vs. last month, Asset Allocation chart, Goal Progress summary, Passive Income.
 
-State is derived, not stored: *pending* if no snapshot exists for the current calendar month, *completed* otherwise.
+State is derived, not stored, and keys off the **`COMPLETED`** snapshot for the current period — *not* mere existence of a row, since a `DRAFT` is also a snapshot for the current month:
+- no snapshot this period → **A**
+- a `DRAFT` this period → **A′**
+- a `COMPLETED` snapshot this period → **B**
 
 ### 3.4 Assets — `/assets`
 
@@ -121,8 +125,8 @@ Exiting mid-wizard saves a draft (`DRAFT` snapshot state) so a household can res
 |---|---|---|
 | Household profile | `/settings/household` | Name, base currency, check-in reminder day |
 | Members | `/settings/members` | List/invite/remove members (v1.1) |
-| Holding types | `/settings/holding-types` | Manage custom holding categories beyond defaults |
-| Notifications | `/settings/notifications` | Check-in reminder channel (email/push) and timing |
+| Holding types | `/settings/holding-types` | Manage custom holding categories beyond defaults (household-scoped — see `02` §2.3) |
+| Notifications | `/settings/notifications` | Check-in reminder timing (email in v1; push is a later addition once a PWA/native surface exists) |
 | Data export | `/settings/export` | Export snapshots as CSV/JSON |
 | Danger zone | `/settings/danger` | Delete household, delete account |
 

@@ -6,11 +6,13 @@ PostgreSQL schema implementing [02-domain-model.md](02-domain-model.md). Managed
 
 ## 1. Design decisions
 
-- **`NUMERIC(24,8)` for all money values**, not `FLOAT`/`DOUBLE` — financial values must never lose precision to floating-point rounding. 8 decimal places covers crypto holdings (e.g. BTC); 24 total digits comfortably covers VND amounts in the billions.
+- **`NUMERIC(24,8)` for all money values**, not `FLOAT`/`DOUBLE` — financial values must never lose precision to floating-point rounding. 8 decimal places covers crypto **coin quantities** (satoshi granularity); 24 total digits comfortably covers VND amounts in the billions. Per-unit price (`fx_rate_to_base`) also uses `NUMERIC(24,8)` so a coin priced in the billions of VND still fits with headroom.
+- **`value` is a native-unit amount, `fx_rate_to_base` is a per-unit price.** Following the native-coin-quantity decision, a `snapshot_holding` row stores *quantity* (fiat balance or coin count) × *unit price* (FX rate or coin price) = `value_base`. One code path for fiat and crypto.
 - **`TIMESTAMPTZ` everywhere.** Households may check in from different timezones; store UTC, format client-side.
 - **Soft-status, not soft-delete, for Holdings.** `status = ARCHIVED` instead of a `deleted_at` flag, because archived holdings still need to render correctly in historical snapshots.
 - **Snapshots mutate in place.** No separate audit/history table in v1 — `version` + `updated_at` on `monthly_snapshot` is the only change signal, per the domain model's versioning rule.
-- **Auth tables are not modeled here.** Recommended stack uses NextAuth/Auth.js, which manages its own `Account` / `Session` / `VerificationToken` tables via its Prisma adapter. `member` below is the application-level profile row, linked 1:1 to the auth provider's user record.
+- **Auth tables are not modeled here.** Recommended stack uses NextAuth/Auth.js, which manages its own `User` / `Account` / `Session` / `VerificationToken` tables via its Prisma adapter. `member` below is the application-level profile row, linked 1:1 to the Auth.js `User` via `member.user_id`.
+- **`holding_type` is dual-scope:** global seed rows (`household_id IS NULL`) plus per-household custom rows. A surrogate UUID PK (not the slug) lets two households reuse a slug without collision.
 - **UUID primary keys** (`gen_random_uuid()`, via `pgcrypto`) — avoids leaking row counts, safe for client-generated optimistic IDs later if needed.
 
 ---
@@ -45,9 +47,10 @@ CREATE TABLE household (
 CREATE TABLE member (
   id             UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   household_id   UUID NOT NULL REFERENCES household(id) ON DELETE CASCADE,
+  user_id        TEXT NOT NULL UNIQUE,          -- = Auth.js User.id (1:1); Auth tables managed by the adapter
   name           TEXT NOT NULL,
-  email          CITEXT NOT NULL UNIQUE,
-  role           member_role NOT NULL DEFAULT 'MEMBER',
+  email          CITEXT NOT NULL UNIQUE,        -- denormalized from the Auth.js user
+  role           member_role NOT NULL DEFAULT 'MEMBER',   -- onboarding sets the first member to 'OWNER'
   created_at     TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
@@ -56,20 +59,28 @@ CREATE INDEX idx_member_household ON member(household_id);
 -- ============ Holdings ============
 
 CREATE TABLE holding_type (
-  id             TEXT PRIMARY KEY,           -- slug: 'cash', 'brokerage', ...
+  id             UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  household_id   UUID REFERENCES household(id) ON DELETE CASCADE,  -- NULL = global seed type
+  slug           TEXT NOT NULL,               -- 'cash', 'brokerage', ... (not globally unique)
   label          TEXT NOT NULL,
   classification holding_classification NOT NULL,
   is_investable  BOOLEAN NOT NULL DEFAULT false,
   is_cash        BOOLEAN NOT NULL DEFAULT false
 );
 
+-- Slug is unique among global seeds, and unique per household among custom types — enforced
+-- with two partial unique indexes since one plain UNIQUE can't express the NULL-scoped split.
+CREATE UNIQUE INDEX uq_holding_type_global ON holding_type(slug)              WHERE household_id IS NULL;
+CREATE UNIQUE INDEX uq_holding_type_custom ON holding_type(household_id, slug) WHERE household_id IS NOT NULL;
+CREATE INDEX idx_holding_type_household ON holding_type(household_id) WHERE household_id IS NOT NULL;
+
 CREATE TABLE holding (
   id              UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   household_id    UUID NOT NULL REFERENCES household(id) ON DELETE CASCADE,
-  holding_type_id TEXT NOT NULL REFERENCES holding_type(id),
+  holding_type_id UUID NOT NULL REFERENCES holding_type(id),
   name            TEXT NOT NULL,
   institution     TEXT,
-  currency        CHAR(3) NOT NULL,
+  currency        VARCHAR(12) NOT NULL,        -- denomination: ISO-4217 fiat code OR crypto ticker (BTC, USDT, ...)
   status          holding_status NOT NULL DEFAULT 'ACTIVE',
   created_at      TIMESTAMPTZ NOT NULL DEFAULT now(),
   archived_at     TIMESTAMPTZ
@@ -92,7 +103,7 @@ CREATE TABLE monthly_snapshot (
   investable_assets_base  NUMERIC(24,8),
   cash_position_base      NUMERIC(24,8),
   passive_income_base     NUMERIC(24,8),
-  savings_rate            NUMERIC(6,4),
+  savings_rate            NUMERIC(9,4),   -- signed fraction; wide enough for negative rates (expenses >> income)
 
   completed_at            TIMESTAMPTZ,
   updated_at              TIMESTAMPTZ NOT NULL DEFAULT now(),
@@ -108,13 +119,19 @@ CREATE INDEX idx_snapshot_household_period ON monthly_snapshot(household_id, per
 CREATE TABLE snapshot_holding (
   id              UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   snapshot_id     UUID NOT NULL REFERENCES monthly_snapshot(id) ON DELETE CASCADE,
-  holding_id      UUID NOT NULL REFERENCES holding(id) ON DELETE RESTRICT,
-  value           NUMERIC(24,8) NOT NULL,
-  fx_rate_to_base NUMERIC(18,8) NOT NULL DEFAULT 1,
-  value_base      NUMERIC(24,8) NOT NULL,
+  holding_id      UUID NOT NULL REFERENCES holding(id) ON DELETE CASCADE,
+  value           NUMERIC(24,8) NOT NULL,      -- native-unit amount: fiat balance OR coin quantity
+  fx_rate_to_base NUMERIC(24,8) NOT NULL DEFAULT 1,  -- price of ONE native unit in base currency
+  value_base      NUMERIC(24,8) NOT NULL,      -- value * fx_rate_to_base
 
   UNIQUE (snapshot_id, holding_id)
 );
+
+-- NOTE: holding_id is ON DELETE CASCADE (not RESTRICT). Domain invariant 7 — "a holding with
+-- snapshot history can't be hard-deleted" — is enforced in the API layer (holding.delete returns
+-- CONFLICT), NOT via this FK. RESTRICT here would deadlock the household-deletion cascade (holding
+-- and monthly_snapshot both cascade from household, and RESTRICT can't be deferred), so a household
+-- could never be deleted. CASCADE keeps the danger-zone "Delete household" flow working.
 
 CREATE INDEX idx_snapshot_holding_snapshot ON snapshot_holding(snapshot_id);
 CREATE INDEX idx_snapshot_holding_holding  ON snapshot_holding(holding_id);
@@ -150,26 +167,43 @@ CREATE TABLE goal_holding (
   holding_id  UUID NOT NULL REFERENCES holding(id) ON DELETE CASCADE,
   PRIMARY KEY (goal_id, holding_id)
 );
+
+-- ============ Reminder state ============
+-- Tracks reminder/follow-up emails per household per period. Lives in its own table because at
+-- reminder time the monthly_snapshot for that period usually does NOT exist yet (that's the point
+-- of the nudge) — so these timestamps can't hang off monthly_snapshot. See 08-api-design.md §4.
+
+CREATE TABLE checkin_reminder_state (
+  household_id     UUID NOT NULL REFERENCES household(id) ON DELETE CASCADE,
+  period_month     DATE NOT NULL,              -- normalized to first-of-month
+  reminder_sent_at TIMESTAMPTZ,
+  follow_up_sent_at TIMESTAMPTZ,
+  PRIMARY KEY (household_id, period_month),
+  CONSTRAINT reminder_period_is_first_of_month
+    CHECK (date_trunc('month', period_month) = period_month)
+);
 ```
 
 ---
 
 ## 3. Seed data — `holding_type`
 
-Loaded once via migration seed script, editable only through a future admin surface (not user-facing in v1 beyond Settings → Holding Types adding new rows with `classification` chosen by the user).
+Loaded once via migration seed script as **global** rows (`household_id = NULL`). Households add their own rows through Settings → Holding Types (with `household_id` set and `classification` chosen by the user); those are covered by the API, not this seed.
 
 ```sql
-INSERT INTO holding_type (id, label, classification, is_investable, is_cash) VALUES
-  ('cash',            'Cash',            'ASSET',     false, true),
-  ('brokerage',       'Brokerage',       'ASSET',     true,  false),
-  ('crypto',          'Crypto',          'ASSET',     true,  false),
-  ('real_estate',     'Real Estate',     'ASSET',     false, false),
-  ('retirement',      'Retirement',      'ASSET',     true,  false),
-  ('other_asset',     'Other Asset',     'ASSET',     false, false),
-  ('loan',            'Loan',            'LIABILITY', false, false),
-  ('credit_card',     'Credit Card',     'LIABILITY', false, false),
-  ('other_liability', 'Other Liability', 'LIABILITY', false, false);
+INSERT INTO holding_type (household_id, slug, label, classification, is_investable, is_cash) VALUES
+  (NULL, 'cash',            'Cash',            'ASSET',     false, true),
+  (NULL, 'brokerage',       'Brokerage',       'ASSET',     true,  false),
+  (NULL, 'crypto',          'Crypto',          'ASSET',     true,  false),
+  (NULL, 'real_estate',     'Real Estate',     'ASSET',     false, false),
+  (NULL, 'retirement',      'Retirement',      'ASSET',     true,  false),
+  (NULL, 'other_asset',     'Other Asset',     'ASSET',     false, false),
+  (NULL, 'loan',            'Loan',            'LIABILITY', false, false),
+  (NULL, 'credit_card',     'Credit Card',     'LIABILITY', false, false),
+  (NULL, 'other_liability', 'Other Liability', 'LIABILITY', false, false);
 ```
+
+`id` is auto-generated (`gen_random_uuid()`); application code resolves seed types by `slug` where `household_id IS NULL`.
 
 ---
 
@@ -197,7 +231,9 @@ INSERT INTO holding_type (id, label, classification, is_investable, is_cash) VAL
 
 ## 6. Multi-tenancy / isolation
 
-All tenant-scoped tables key off `household_id` (directly or transitively via `snapshot_id`/`holding_id`/`goal_id`). Two viable enforcement layers, either is acceptable for v1:
+All tenant-scoped tables key off `household_id` (directly or transitively via `snapshot_id`/`holding_id`/`goal_id`). The one deliberate exception is `holding_type`, which is **dual-scope**: rows with `household_id IS NULL` are global seeds shared by every household, while rows with `household_id` set are private custom types. Queries that list a household's types must therefore filter `household_id = :hh OR household_id IS NULL` — the only place a tenant query intentionally reaches outside its own `household_id`.
+
+Two viable enforcement layers, either is acceptable for v1:
 
 1. **Application-layer scoping** — every query filters by the authenticated member's `household_id`. Simpler, matches a Prisma-based API layer.
 2. **Postgres Row-Level Security (RLS)** — defense-in-depth if using Supabase or exposing the DB more directly. Recommended if v2 ever adds direct client-to-DB access (e.g. Supabase client SDK); not required if all access goes through the API layer in `08-api-design.md`.

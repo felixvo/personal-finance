@@ -48,20 +48,38 @@ savingsRate = totalIncome == 0
 
 Stored as a decimal fraction (`0.42`), formatted as a percentage at render time only (design-system concern, not this module's).
 
-### 1.6 FX conversion
+### 1.6 Unit-price conversion (fiat FX **and** crypto)
 
-Resolves Open Question 2 from `00-product-vision.md`. At the moment a `SnapshotHolding` is written (check-in step 2, or ad hoc holding add):
+Resolves Open Question 2 and the native-coin-quantity decision. `value` is an **amount in the holding's native unit** (a fiat balance, or a coin quantity); `fxRateToBase` is the **price of one native unit in base currency**. At the moment a `SnapshotHolding` is written (check-in step 2, or ad hoc holding add):
 
 ```
 valueBase = value × fxRateToBase
 ```
 
-`fxRateToBase` is either:
-- `1`, if `Holding.currency == Household.baseCurrency`, or
-- a manually entered rate (v1), or
-- a fetched reference rate the user confirms before saving (v2 candidate per `00`, Open Question 3 — never applied silently).
+`fxRateToBase` is:
+- `1`, when `Holding.currency == Household.baseCurrency` (native fiat balance, no conversion), or
+- a **fiat exchange rate** — e.g. holding in USD, base VND → units of VND per 1 USD, or
+- a **crypto unit price** — e.g. holding `0.5 BTC`, base VND → VND per 1 BTC.
+- Manually entered in v1; a fetched reference rate/price the user confirms before saving is a v2 candidate (`00`, Open Question 3 — never applied silently).
 
-The rate is **frozen at write time** and stored on the row (`03-database-design.md` §2). Recomputing historical `valueBase` when today's FX rate changes is explicitly not done — domain invariant 8.
+The one formula covers both cases identically (base = VND):
+
+```
+fiat   :  12,400 USD × 25,300 VND/USD          =   313,720,000 VND
+crypto :   0.5  BTC  × 1,600,000,000 VND/BTC    =   800,000,000 VND
+```
+
+The rate/price is **frozen at write time** and stored on the row (`03-database-design.md` §2). Recomputing historical `valueBase` when today's rate moves is explicitly not done — domain invariant 8.
+
+### 1.7 Monthly Invested
+
+The `INVESTMENT_CONTRIBUTION` cash-flow category is collected during check-in (the PRD's "update monthly investments") and must not be dead data. It surfaces as a derived figure — no new cached column needed, since it's a plain sum of already-stored rows:
+
+```
+monthlyInvested = Σ SnapshotCashFlow.amount where category = INVESTMENT_CONTRIBUTION
+```
+
+Shown on the check-in review (§5) and Timeline. It deliberately does **not** feed Net Worth or Savings Rate (a contribution is a *movement* of money already counted inside a holding balance, not new income or an expense — double-counting it would distort both). Its v2 use is a reconciliation hint: comparing `monthlyInvested` against the month-over-month rise in `investableAssetsBase` shows how much growth came from contributions vs. market movement — surfaced as information, never as a judgment (per `00` philosophy).
 
 ---
 
@@ -72,7 +90,7 @@ Resolves Open Question 7. Two distinct engines exist and must not be confused:
 - **Goal pace** (this section) — backward-looking, derived from actual `MonthlySnapshot` history. Powers the Goals screens (`01` §3.5).
 - **What-If projection** (§3 below) — forward-looking, derived from hypothetical user inputs. Powers `/what-if` and never touches stored snapshot data except to pre-fill a starting value.
 
-### 2.1 Tracked value
+### 2.1 Tracked value & progress
 
 ```
 trackedValue(snapshot, goal) =
@@ -80,6 +98,16 @@ trackedValue(snapshot, goal) =
     ? snapshot.netWorthBase
     : Σ SnapshotHolding.valueBase in `snapshot` where holdingId ∈ goal.linkedHoldings
 ```
+
+**Progress %** is the headline number on every Goals screen (`05-wireframes.md` §5) and needs an explicit definition — it's separate from pace:
+
+```
+progress = targetAmount <= 0
+  ? null                                             // guard against a zero/negative target
+  : clamp(trackedValue(latestSnapshot, goal) / targetAmount, 0, 1)
+```
+
+Clamped to `[0, 1]` for the progress bar; the raw ratio (which can exceed 1 once a goal is surpassed, or read low/negative if liabilities dominate a Net-Worth goal early) is available for the label. Displayed rounded to whole percent. `trackingMode = HOLDING_SUBSET` sums only linked holdings (domain invariant 10).
 
 ### 2.2 Pace
 

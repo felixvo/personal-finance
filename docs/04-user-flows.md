@@ -7,10 +7,10 @@ Concrete step-by-step flows implementing the screens in [01-information-architec
 ## 1. Onboarding → first check-in
 
 **Preconditions:** no account exists.
-**Postconditions:** `Household`, first `Member`, and one `COMPLETED` `MonthlySnapshot` exist.
+**Postconditions:** Auth.js `User`, `Household`, first `Member` (role `OWNER`), and one `COMPLETED` `MonthlySnapshot` exist.
 
-1. User signs up (email + password, or magic link) → creates `Member`.
-2. Household creation form: household name, base currency, check-in day → creates `Household`.
+1. User signs up (email + password, or magic link) → Auth.js creates the **`User`** record. (No `Member` yet — `member.household_id` is `NOT NULL`, so a member can't exist before its household.)
+2. Household creation form: household name, base currency, check-in day → creates `Household`, then the first `Member` (`user_id` = the Auth.js user, `role = OWNER`) in the same transaction.
 3. Redirect to `/` → empty state: "You haven't done a check-in yet."
 4. User clicks "Start Financial Check-in" → enters wizard at `/check-in`, creates a `DRAFT` `MonthlySnapshot` for the current `periodMonth`.
 5. **Step 1 (Review) is skipped** — no prior snapshot to copy forward from.
@@ -46,7 +46,7 @@ flowchart TD
 
 1. Household lands on Home; since no snapshot exists for this `periodMonth`, Home renders **Check-in Pending**.
 2. User clicks "Start Financial Check-in" → system creates a `DRAFT` `MonthlySnapshot`, then copy-forwards (domain invariant 9):
-   - a `snapshot_holding` row per currently `ACTIVE` `Holding`, with `value` = last completed snapshot's value for that holding (`0` if the holding didn't exist last month — see §4).
+   - a `snapshot_holding` row per currently `ACTIVE` `Holding`, with `value` = last completed snapshot's value for that holding. A holding with **no prior value** (added since the last check-in) is carried as an **empty/unset value that requires entry** — rendered as `—`, not `0` — so the user is prompted for a first figure rather than silently defaulting to zero (consistent with Flow 4 §5).
    - `snapshot_cash_flow` rows copied from last month as defaults (income/expenses tend to repeat; user edits rather than re-enters from scratch).
 3. **Step 1 — Review:** user sees the copied-forward figures as a starting point.
 4. **Step 2 — Update Holdings:** user edits `value` per holding inline (most holdings: change one number, e.g. account balance).
@@ -80,7 +80,7 @@ flowchart TD
 **Postconditions:** new `ACTIVE` `Holding` exists; may or may not have a value yet depending on entry point.
 
 1. User clicks "Add Holding" from `/assets` **or** from Check-in Step 3.
-2. Form: name, holding type (dropdown seeded from `holding_type`), institution (optional), currency, initial value.
+2. Form: name, holding type (dropdown = global seed types + this household's custom types), institution (optional), denomination (fiat code or crypto ticker), and amount **in that native unit** (a fiat balance, or a coin quantity like `0.5` BTC). When the denomination ≠ the household base currency, the form also captures a per-unit price (FX rate or coin price) — see [07-calculation-engine.md](07-calculation-engine.md) §1.6.
 3. System creates the `Holding` row (`status = ACTIVE`).
 4. **If a `DRAFT` snapshot currently exists** for the household: also create a `snapshot_holding` row immediately with the entered value, so it's included when the check-in is completed.
 5. **If no `DRAFT` snapshot exists** (added between check-ins, e.g. mid-month): the holding exists but has zero `snapshot_holding` history. It renders on `/assets` as "not yet valued this cycle." The next check-in's copy-forward step (Flow 2, step 2) includes it with a prompt to enter its first value, rather than a copied number, since there's nothing to copy forward.
@@ -103,7 +103,7 @@ flowchart TD
 
 ## 6. Create a goal
 
-**Preconditions:** household has at least one `COMPLETED` snapshot (goals need a baseline to project pace from).
+**Preconditions:** none required — a goal can be created at any time. Pace/projection simply reports `insufficient-data` until two `COMPLETED` snapshots exist to derive a trend from (see [07-calculation-engine.md](07-calculation-engine.md) §2.3); progress % still shows from the first snapshot.
 **Postconditions:** new `Goal` exists, visible on `/goals` with computed progress.
 
 1. User clicks "New Goal" on `/goals`.

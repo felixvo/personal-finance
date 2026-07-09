@@ -187,14 +187,19 @@ The original PRD is a strong vision doc but leaves some product decisions implic
 | # | Question | Assumption made for this doc set | Impact if wrong |
 |---|----------|-----------------------------------|------------------|
 | 1 | Is Atlas single-user or multi-member per household? | **Multi-member household**: one account = one family; multiple members can log in and share one set of holdings/snapshots (no per-member permission tiers in v1). | Changes auth model and domain model (`Household` → `Member`) |
-| 2 | How is multi-currency Net Worth computed? | Household sets one **base currency** (e.g. VND). Each holding stores its native currency + value; Net Worth is converted at snapshot time using a stored FX rate (manually entered or fetched), not recalculated retroactively. | Changes DB schema and calculation engine significantly |
+| 2 | How is multi-currency Net Worth computed? | Household sets one **base currency** (e.g. VND). Each holding stores its native **denomination** (fiat code *or* crypto ticker) + amount; crypto is stored as **native coin quantity** priced by a per-unit rate. Net Worth is converted at snapshot time using a stored per-unit rate (manually entered or fetched), not recalculated retroactively. *(Decided: crypto = native quantity × unit price.)* | Changes DB schema and calculation engine significantly |
 | 3 | Are FX/market rates ever fetched automatically? | v1: manual entry only, consistent with the state-based philosophy. v2 candidate: optional read-only price/FX feed to reduce check-in friction, still user-confirmed, never auto-applied silently. | Affects roadmap phasing, not core model |
 | 4 | Are liabilities (loans, mortgages, credit card debt) first-class? | Yes — a Holding can be `ASSET` or `LIABILITY`. Net Worth = Σ assets − Σ liabilities. "Personal Loans" in the PRD is treated as a liability-type holding. | Net Worth formula and schema both depend on this |
 | 5 | What does "editable snapshot" mean precisely? | Editing a past snapshot **mutates that snapshot in place** and bumps its `version` + `updatedAt`; it does not fork a new timeline entry. Full field-level audit trail is out of scope for v1 (version counter only). | Changes DB design (audit table vs. version counter) |
 | 6 | Archive vs. delete for holdings — what's the difference? | **Archive**: holding stops appearing in the active check-in flow but its historical value remains in past snapshots (e.g., closed account). **Delete**: only allowed if the holding has never been included in a completed snapshot; otherwise force archive instead. | Domain model + UX for check-in step 3 |
-| 7 | How are Goals computed from snapshots? | Goal progress is derived by comparing a chosen metric (e.g. Net Worth) across snapshots to project pace (linear regression over trailing N months) toward a target. Not manually updated by the user. | Calculation engine design |
+| 7 | How are Goals computed from snapshots? | Goal progress is derived by comparing a chosen metric (e.g. Net Worth) across snapshots to project pace toward a target. v1 uses a **trailing moving average** of month-over-month change (OLS regression deferred to v2 — see `07` §2.2). Not manually updated by the user. | Calculation engine design |
 | 8 | Is there a reminder/nudge for the monthly ritual? | v1 needs at least email (or push, if PWA) reminder around a household-configured "check-in day." Not in the original PRD but required for the ritual to actually happen. | Adds a small notification concern to roadmap |
 | 9 | Is a "What If" simulation ever saved, or always ephemeral? | v1: ephemeral, recomputed client-side each time, not persisted. v2 candidate: allow saving a named scenario. | Affects API design (`08`) and DB scope |
+
+**Decisions made during the consistency audit (post-v1.1):**
+
+- **Custom holding types are per-household**, not global reference data. The seed set is shared (household-agnostic); any type a household adds is scoped to that household. See `02` §2.3 / `03` §2.
+- **Crypto is stored as native coin quantity** (e.g. `0.5 BTC`), not a pre-converted fiat value, with a per-unit price used for base-currency conversion (Q2 above). See `07` §1.6.
 
 ---
 

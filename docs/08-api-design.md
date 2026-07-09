@@ -9,8 +9,8 @@
 | Frontend | **Next.js (App Router) + TypeScript** | Single deployable for a desktop-first web app (per platform decision in `00`); server components suit data-heavy dashboard screens (Home, Timeline) well |
 | API layer | **tRPC**, mounted on Next.js Route Handlers | This is a single first-party web client with no third-party API consumers in v1 — end-to-end type inference from the Prisma models straight through the [calculation engine](07-calculation-engine.md) to the UI removes an entire class of contract-drift bugs, at far less boilerplate than hand-written REST + OpenAPI. Revisit only if a public API or mobile client becomes a real requirement (see `09-roadmap.md`) |
 | ORM / DB | **Prisma + PostgreSQL** | Matches `03-database-design.md` exactly; Prisma Migrate is the migration tool named there |
-| Auth | **Auth.js (NextAuth)** | Email/magic-link + password, session cookie, owns its own `User`/`Session` tables per `03-database-design.md` §1; `Member` is the app-level profile linked 1:1 |
-| Money math | **decimal.js** | Required by `07-calculation-engine.md` §0 — never native `number` for currency |
+| Auth | **Auth.js (NextAuth)** | Email/magic-link + password, session cookie, owns its own `User`/`Account`/`Session`/`VerificationToken` tables per `03-database-design.md` §1; `Member` is the app-level profile linked 1:1 to `User` via `member.user_id` |
+| Money math | **decimal.js** | Required by `07-calculation-engine.md` (Precision rule) — never native `number` for currency |
 | Charts | **Recharts** (or **visx** if the [design system](06-design-system.md)'s mark specs — 2px lines, 4px rounded bar ends, custom stacked-bar gaps — turn out easier to hit with a lower-level library) | Both support the custom SVG control the `dataviz`-derived spec needs; final pick is an implementation detail, not a product decision |
 | Hosting | **Vercel** (app) + **Neon or Supabase** (Postgres) | Low-ops, matches Next.js natively, generous free tier appropriate for a single-household v1 |
 | Email (reminders) | **Resend** | Simple transactional email API, used only for Flow 3 (`04-user-flows.md`) monthly reminders |
@@ -53,8 +53,8 @@
 | `create` | mutation | `{ name, holdingTypeId, institution?, currency, initialValue }` | `Holding` | Implements Flow 4; also writes a `SnapshotHolding` into the open `DRAFT` if one exists |
 | `archive` | mutation | `{ holdingId, finalValue? }` | `Holding` | Implements Flow 5 |
 | `delete` | mutation | `{ holdingId }` | `void` | Rejects with `CONFLICT` unless zero `SnapshotHolding` rows exist (invariant 7) |
-| `listTypes` | query | — | `HoldingType[]` | Seeded + household custom types |
-| `createType` | mutation | `{ label, classification, isInvestable, isCash }` | `HoldingType` | Settings → Holding Types |
+| `listTypes` | query | — | `HoldingType[]` | Global seed types (`household_id IS NULL`) **plus** this household's custom types — the `household_id = :hh OR household_id IS NULL` filter from `03` §6 |
+| `createType` | mutation | `{ label, classification, isInvestable, isCash }` | `HoldingType` | Settings → Holding Types. Row is written with `household_id` = the session's household (never global); the server derives a `slug` from `label` and ensures it's unique among that household's types |
 
 ### 3.4 `checkIn`
 
@@ -62,7 +62,7 @@ The stateful wizard flow (Flow 2/3 in `04-user-flows.md`), kept as its own route
 
 | Procedure | Type | Input | Output | Notes |
 |---|---|---|---|---|
-| `getStatus` | query | — | `{ state: 'no-draft' \| 'draft' \| 'completed-this-month', snapshot? }` | Drives Home's two states (`01` §3.3) |
+| `getStatus` | query | — | `{ state: 'no-draft' \| 'draft' \| 'completed-this-month', snapshot? }` | Drives Home's three derived states (`01` §3.3) |
 | `start` | mutation | — | `MonthlySnapshot` (DRAFT) | Creates draft + copy-forward (domain invariant 9); no-ops (returns existing) if a draft already exists |
 | `updateHoldingValue` | mutation | `{ snapshotId, holdingId, value }` | `SnapshotHolding` | Step 2 |
 | `updateCashFlow` | mutation | `{ snapshotId, category, label, amount }` upsert | `SnapshotCashFlow` | Step 4 |
@@ -73,9 +73,10 @@ The stateful wizard flow (Flow 2/3 in `04-user-flows.md`), kept as its own route
 
 | Procedure | Type | Input | Output | Notes |
 |---|---|---|---|---|
-| `getLatest` | query | — | `MonthlySnapshot \| null` | Home dashboard state B |
+| `getDashboard` | query | — | `{ latest: MonthlySnapshot \| null, previous: MonthlySnapshot \| null }` | Home dashboard state B. Returns the two most recent `COMPLETED` snapshots so the "vs. last month" delta ([04](04-user-flows.md) Flow 8) can be computed without a second round-trip |
+| `getById` | query | `{ snapshotId }` | `MonthlySnapshot` (with holdings + cash flow) | Snapshot detail — matches the `/timeline/[snapshotId]` route ([01](01-information-architecture.md) §3.7) |
 | `listTimeline` | query | `{ cursor?, limit? }` | `MonthlySnapshot[]` | Paginated, reverse-chronological |
-| `getByPeriod` | query | `{ periodMonth }` | `MonthlySnapshot` (with holdings + cash flow) | Timeline/snapshot detail |
+| `getByPeriod` | query | `{ periodMonth }` | `MonthlySnapshot` (with holdings + cash flow) | Alternate lookup by month (e.g. deep links) |
 | `edit` | mutation | `{ snapshotId, holdings?: [...], cashFlow?: [...], notes? }` | `MonthlySnapshot` | Implements Flow 8: mutates in place, `version += 1`, recomputes cached metrics |
 
 ### 3.6 `goal`
@@ -90,13 +91,11 @@ The stateful wizard flow (Flow 2/3 in `04-user-flows.md`), kept as its own route
 
 ### 3.7 What-If — no router
 
-Per `07-calculation-engine.md` §3 and Open Question 9, What-If simulations run entirely client-side against the shared `calc-engine` package. The only server dependency is `snapshot.getLatest`, reused to pre-fill "Current Amount" — no dedicated `whatIf` procedures exist in v1.
+Per `07-calculation-engine.md` §3 and Open Question 9, What-If simulations run entirely client-side against the shared `calc-engine` package. The only server dependency is `snapshot.getDashboard` (its `latest` field), reused to pre-fill "Current Amount" — no dedicated `whatIf` procedures exist in v1.
 
-### 3.8 `export`
+### 3.8 Export — a Route Handler, not tRPC
 
-| Procedure | Type | Input | Output | Notes |
-|---|---|---|---|---|
-| `household` | query | `{ format: 'csv' \| 'json' }` | file stream | All snapshots, holdings, cash flow, goals for the household |
+File downloads don't fit tRPC's JSON-RPC shape, so export is a plain **Next.js Route Handler** (`GET /api/export?format=csv|json`), session-authenticated the same way as tRPC context (resolves `member → household`), streaming an attachment with the right `Content-Disposition`. Payload: all snapshots, holdings, cash flow, and goals for the household.
 
 ---
 
@@ -116,7 +115,7 @@ daily @ 09:00 household-local (v1 simplification: 09:00 UTC+7, since first house
       send "follow-up" email → mark followUpSentAt
 ```
 
-`reminderSentAt` / `followUpSentAt` live on `monthly_snapshot`... except the snapshot may not exist yet at reminder time (that's the point). These two timestamps need their own small table (`checkin_reminder_state`, keyed on `householdId` + `periodMonth`) rather than being bolted onto `monthly_snapshot` — flagging this as a one-table gap in `03-database-design.md` to add when the reminder feature is actually built (not included in the initial schema since it's additive and non-blocking for core check-in functionality).
+`reminderSentAt` / `followUpSentAt` can't live on `monthly_snapshot`, because at reminder time the snapshot usually doesn't exist yet (that's the point of the nudge). They live in the dedicated **`checkin_reminder_state`** table (keyed on `household_id` + `period_month`), now part of the schema in [03-database-design.md](03-database-design.md) §2. The job upserts a row per household per period as it sends.
 
 ---
 

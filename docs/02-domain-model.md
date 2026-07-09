@@ -12,6 +12,7 @@ erDiagram
     HOUSEHOLD ||--o{ HOLDING : owns
     HOUSEHOLD ||--o{ MONTHLY_SNAPSHOT : records
     HOUSEHOLD ||--o{ GOAL : sets
+    HOUSEHOLD ||--o{ HOLDING_TYPE : "defines custom (seed set is global)"
 
     HOLDING ||--o{ SNAPSHOT_HOLDING : "valued in"
     HOLDING }o--|| HOLDING_TYPE : categorized_as
@@ -46,24 +47,29 @@ A person who can log in and act on behalf of the household. Resolves Open Questi
 |---|---|---|
 | `id` | UUID | PK |
 | `householdId` | UUID | FK → Household |
+| `userId` | string | 1:1 link to the Auth.js `User` record (the source of truth for credentials). See [03-database-design.md](03-database-design.md) §1 |
 | `name` | string | |
-| `email` | string | unique, used for auth |
-| `role` | enum | `OWNER` \| `MEMBER`. Single tier of permissions in v1 — both can edit everything. `OWNER` only matters for household-deletion authority |
+| `email` | string | unique; denormalized from the Auth.js user for convenience |
+| `role` | enum | `OWNER` \| `MEMBER`. Single tier of permissions in v1 — both can edit everything. `OWNER` only matters for household-deletion authority. **The member created during onboarding is always `OWNER`**, so a household always has one |
 | `createdAt` | timestamp | |
 
 ### 2.3 HoldingType
 
-Reference data (seeded, not user-created in v1 beyond the "custom" escape hatch from Settings).
+Two tiers in one table: a **global seed set** (shared by all households, `householdId = null`) plus **per-household custom types** a household adds from Settings (`householdId` set). Resolves the audit decision that custom types are household-scoped, not global.
 
 | Field | Type | Notes |
 |---|---|---|
-| `id` | string (slug) | PK, e.g. `cash`, `brokerage`, `crypto`, `real_estate`, `retirement`, `loan`, `credit_card`, `other_asset`, `other_liability` |
+| `id` | UUID | PK. (Was a slug in v1.1; promoted to a surrogate key so two households can each define, say, a `gold` slug without colliding.) |
+| `householdId` | UUID, nullable | `null` = global seed type (visible to everyone); set = custom type owned by that household |
+| `slug` | string | Stable code, e.g. `cash`, `crypto`. Unique among global types, and unique per household among custom types — never globally unique on its own anymore |
 | `label` | string | Display name |
 | `classification` | enum | `ASSET` \| `LIABILITY` — determines Net Worth sign |
 | `isInvestable` | boolean | Included in "Investable Assets" metric (true for brokerage/crypto/retirement; false for cash, real estate, liabilities) |
 | `isCash` | boolean | Included in "Cash Position" metric |
 
-Seed set (v1):
+A household's effective type list = all global seed types + its own custom types. Custom types set `classification`/`isInvestable`/`isCash` at creation (Settings), so they flow through every metric in §3 exactly like seed types.
+
+Seed set (v1) — all with `householdId = null`:
 
 | slug | classification | isInvestable | isCash |
 |---|---|---|---|
@@ -86,9 +92,9 @@ A place where money is stored — the master record. Resolves Open Question 4 (a
 | `id` | UUID | PK |
 | `householdId` | UUID | FK → Household |
 | `holdingTypeId` | string | FK → HoldingType |
-| `name` | string | e.g. "MSB", "IBKR", "Celesta Rise" |
+| `name` | string | e.g. "MSB", "IBKR", "Celesta Rise", "OKX — BTC" |
 | `institution` | string, nullable | Optional grouping label separate from name |
-| `currency` | Currency code | Native currency this holding is valued in |
+| `currency` | Denomination code | The unit this holding is counted in: an ISO-4217 fiat code (`VND`, `USD`) **or** a crypto ticker (`BTC`, `ETH`, `USDT`). Crypto holdings are counted in coin quantity, not pre-converted fiat — see §2.6 |
 | `status` | enum | `ACTIVE` \| `ARCHIVED` |
 | `createdAt` | timestamp | |
 | `archivedAt` | timestamp, nullable | |
@@ -119,7 +125,7 @@ Cached metrics (computed at completion/edit time by the [calculation engine](07-
 | `investableAssetsBase` | decimal |
 | `cashPositionBase` | decimal |
 | `passiveIncomeBase` | decimal |
-| `savingsRate` | decimal (0–1) |
+| `savingsRate` | decimal (signed fraction; ≤ 1, and **negative when expenses exceed income** — not clamped to 0) |
 
 **Versioning rule:** editing a `COMPLETED` snapshot mutates it in place (per Open Question 5 — no forked timeline entries) and increments `version`. Cached metrics are recomputed on every edit. Field-level audit history is out of scope for v1; `version` + `updatedAt` is the only change signal.
 
@@ -134,11 +140,13 @@ The value of one Holding at one point in time — the actual "state" record the 
 | `id` | UUID | PK |
 | `snapshotId` | UUID | FK → MonthlySnapshot |
 | `holdingId` | UUID | FK → Holding |
-| `value` | decimal | In the holding's native currency |
-| `fxRateToBase` | decimal | Rate captured at entry time; `1` if currency == household base currency |
+| `value` | decimal | **Amount in the holding's native unit** — a fiat balance (`115,000,000` VND) or a coin quantity (`0.5` BTC) |
+| `fxRateToBase` | decimal | **Price of one native unit in base currency**, captured at entry time: an FX rate for fiat, a coin price for crypto. `1` when the holding's denomination == household base currency |
 | `valueBase` | decimal | Computed: `value × fxRateToBase`, stored for query performance |
 
-Unique on (`snapshotId`, `holdingId`). Resolves Open Question 2 (multi-currency): each line item carries its own FX rate frozen at entry time, so historical snapshots never silently reflow when rates change later.
+Unique on (`snapshotId`, `holdingId`). Resolves Open Question 2 (multi-currency) **and** the native-coin-quantity decision: `fxRateToBase` generalizes from "exchange rate" to "per-unit price," so crypto (quantity × unit price) and fiat (balance × FX rate) use one identical code path. The rate/price is frozen at entry time, so historical snapshots never silently reflow when rates move later.
+
+> **Crypto precision note:** `value` holds coin quantity at the schema's 8-decimal scale — ample for net-worth-level tracking (satoshi granularity). Assets with deeper native precision (ETH's 18 decimals / wei) round to 8 dp; acceptable because Atlas tracks holdings-level value, not on-chain exactness.
 
 ### 2.7 SnapshotCashFlow
 
