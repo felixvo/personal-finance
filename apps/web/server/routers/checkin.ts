@@ -1,7 +1,7 @@
 import { z } from "zod";
 import { TRPCError } from "@trpc/server";
 import type { PrismaClient } from "@prisma/client";
-import { computeMetrics, Decimal } from "@atlas/calc-engine";
+import { computeMetrics, valueBase as computeValueBase, Decimal } from "@atlas/calc-engine";
 import { router, householdProcedure } from "../trpc";
 import { moneyString } from "../money";
 import { currentPeriodMonth } from "../period";
@@ -148,6 +148,57 @@ export const checkInRouter = router({
         select: { id: true },
       });
       return { id: cf.id };
+    }),
+
+  /**
+   * Step 2 — update a holding's value in the draft (edit a copied-forward figure
+   * or set a first value). Re-derives valueBase; keeps the existing FX rate for a
+   * foreign holding unless a new one is supplied.
+   */
+  updateHoldingValue: householdProcedure
+    .input(
+      z.object({
+        snapshotId: z.string().uuid(),
+        holdingId: z.string().uuid(),
+        value: moneyString,
+        fxRateToBase: moneyString.optional(),
+      }),
+    )
+    .mutation(async ({ ctx, input }) => {
+      await assertOwnedDraft(ctx.prisma, ctx.householdId, input.snapshotId);
+
+      const holding = await ctx.prisma.holding.findFirst({
+        where: { id: input.holdingId, householdId: ctx.householdId },
+        select: { currency: true },
+      });
+      if (!holding) throw new TRPCError({ code: "NOT_FOUND" });
+
+      const household = await ctx.prisma.household.findUniqueOrThrow({
+        where: { id: ctx.householdId },
+        select: { baseCurrency: true },
+      });
+      const isBase = holding.currency === household.baseCurrency;
+      const existing = await ctx.prisma.snapshotHolding.findUnique({
+        where: { snapshotId_holdingId: { snapshotId: input.snapshotId, holdingId: input.holdingId } },
+        select: { fxRateToBase: true },
+      });
+      const fxRate = isBase
+        ? "1"
+        : (input.fxRateToBase ?? existing?.fxRateToBase.toString() ?? "1");
+      const valueBase = computeValueBase(input.value, fxRate).toString();
+
+      await ctx.prisma.snapshotHolding.upsert({
+        where: { snapshotId_holdingId: { snapshotId: input.snapshotId, holdingId: input.holdingId } },
+        create: {
+          snapshotId: input.snapshotId,
+          holdingId: input.holdingId,
+          value: input.value,
+          fxRateToBase: fxRate,
+          valueBase,
+        },
+        update: { value: input.value, fxRateToBase: fxRate, valueBase },
+      });
+      return { ok: true };
     }),
 
   removeCashFlow: householdProcedure

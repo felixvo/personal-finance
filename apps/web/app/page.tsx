@@ -47,7 +47,11 @@ export default async function Home() {
 
   // ---- State B: dashboard (a COMPLETED snapshot exists for this period) ----
   if (status.state === "completed-this-month") {
-    const { latest } = await caller.snapshot.getDashboard();
+    const { latest, previous } = await caller.snapshot.getDashboard();
+    const delta =
+      latest?.netWorth != null && previous?.netWorth != null
+        ? Number(latest.netWorth) - Number(previous.netWorth)
+        : null;
     const cur = household.baseCurrency;
     const money = (v: string | null) => (v != null ? formatMoney(Number(v), cur) : "—");
 
@@ -91,8 +95,14 @@ export default async function Home() {
               </div>
             ))}
           </div>
-          <p className="muted" style={{ margin: "1.4rem 0 0", fontSize: "0.8rem" }}>
-            Checked in for {latest?.periodMonth}. Your next check-in opens next month.
+          {delta != null && (
+            <p className="muted" style={{ margin: "1.4rem 0 0", fontSize: "0.85rem" }}>
+              {delta >= 0 ? "+" : "−"}
+              {formatMoney(Math.abs(delta), cur)} since {previous?.periodMonth}
+            </p>
+          )}
+          <p className="muted" style={{ margin: "0.5rem 0 0", fontSize: "0.8rem" }}>
+            Checked in for {latest?.periodMonth}. <Link href="/timeline">View timeline →</Link>
           </p>
         </div>
       </main>

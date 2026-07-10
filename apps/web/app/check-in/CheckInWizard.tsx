@@ -22,7 +22,6 @@ export function CheckInWizard({ baseCurrency }: { baseCurrency: string }) {
 
   const invalidate = () => utils.checkIn.getDraft.invalidate();
   const createHolding = trpc.holding.create.useMutation({ onSuccess: invalidate });
-  const removeHolding = trpc.holding.removeFromDraft.useMutation({ onSuccess: invalidate });
   const addCashFlow = trpc.checkIn.addCashFlow.useMutation({ onSuccess: invalidate });
   const removeCashFlow = trpc.checkIn.removeCashFlow.useMutation({ onSuccess: invalidate });
   const complete = trpc.checkIn.complete.useMutation();
@@ -148,39 +147,13 @@ export function CheckInWizard({ baseCurrency }: { baseCurrency: string }) {
         ) : (
           <ul style={{ listStyle: "none", margin: "0 0 1rem", padding: 0, display: "flex", flexDirection: "column", gap: "0.5rem" }}>
             {draft.holdings.map((h) => (
-              <li
+              <HoldingRow
                 key={h.holdingId}
-                style={{
-                  display: "flex",
-                  justifyContent: "space-between",
-                  alignItems: "center",
-                  gap: "1rem",
-                  border: "1px solid var(--border)",
-                  borderRadius: "10px",
-                  padding: "0.6rem 0.8rem",
-                }}
-              >
-                <div>
-                  <div style={{ fontWeight: 600, fontSize: "0.92rem" }}>
-                    {h.name}{" "}
-                    <span className="muted" style={{ fontWeight: 400 }}>
-                      · {h.typeLabel}
-                      {h.classification === "LIABILITY" ? " (liability)" : ""}
-                    </span>
-                  </div>
-                  <div className="muted" style={{ fontSize: "0.8rem" }}>
-                    {Number(h.value).toLocaleString("en-US", { maximumFractionDigits: 8 })} {h.currency}
-                    {h.currency !== baseCurrency ? ` → ${formatMoney(Number(h.valueBase), baseCurrency)}` : ""}
-                  </div>
-                </div>
-                <button
-                  className="btn-ghost"
-                  type="button"
-                  onClick={() => removeHolding.mutate({ holdingId: h.holdingId })}
-                >
-                  Remove
-                </button>
-              </li>
+                h={h}
+                baseCurrency={baseCurrency}
+                snapshotId={draft.id}
+                onChanged={invalidate}
+              />
             ))}
           </ul>
         )}
@@ -331,5 +304,97 @@ export function CheckInWizard({ baseCurrency }: { baseCurrency: string }) {
         )}
       </section>
     </main>
+  );
+}
+
+type DraftHolding = {
+  holdingId: string;
+  name: string;
+  typeLabel: string;
+  classification: string;
+  currency: string;
+  value: string;
+  fxRateToBase: string;
+  valueBase: string;
+};
+
+function HoldingRow({
+  h,
+  baseCurrency,
+  snapshotId,
+  onChanged,
+}: {
+  h: DraftHolding;
+  baseCurrency: string;
+  snapshotId: string;
+  onChanged: () => void;
+}) {
+  const update = trpc.checkIn.updateHoldingValue.useMutation({ onSuccess: onChanged });
+  const remove = trpc.holding.removeFromDraft.useMutation({ onSuccess: onChanged });
+  const [value, setValue] = useState(h.value);
+  const [fx, setFx] = useState(h.fxRateToBase);
+  const foreign = h.currency !== baseCurrency;
+
+  function commit() {
+    const changed = value !== h.value || (foreign && fx !== h.fxRateToBase);
+    if (changed && value.trim()) {
+      update.mutate({ snapshotId, holdingId: h.holdingId, value, fxRateToBase: foreign ? fx : undefined });
+    }
+  }
+
+  return (
+    <li
+      style={{
+        display: "flex",
+        justifyContent: "space-between",
+        alignItems: "center",
+        gap: "1rem",
+        border: "1px solid var(--border)",
+        borderRadius: "10px",
+        padding: "0.55rem 0.8rem",
+      }}
+    >
+      <div style={{ minWidth: 0 }}>
+        <div style={{ fontWeight: 600, fontSize: "0.92rem" }}>
+          {h.name}{" "}
+          <span className="muted" style={{ fontWeight: 400 }}>
+            · {h.typeLabel}
+            {h.classification === "LIABILITY" ? " (liability)" : ""}
+          </span>
+        </div>
+        <div className="muted" style={{ fontSize: "0.78rem" }}>
+          → {formatMoney(Number(h.valueBase), baseCurrency)}
+        </div>
+      </div>
+      <div style={{ display: "flex", alignItems: "center", gap: "0.4rem" }}>
+        <input
+          className="input"
+          inputMode="decimal"
+          value={value}
+          onChange={(e) => setValue(e.target.value)}
+          onBlur={commit}
+          aria-label={`${h.name} value`}
+          style={{ width: "7.5rem", padding: "0.35rem 0.5rem" }}
+        />
+        <span className="muted" style={{ fontSize: "0.8rem" }}>
+          {h.currency}
+        </span>
+        {foreign && (
+          <input
+            className="input"
+            inputMode="decimal"
+            value={fx}
+            onChange={(e) => setFx(e.target.value)}
+            onBlur={commit}
+            title={`Price of 1 ${h.currency} in ${baseCurrency}`}
+            aria-label={`${h.name} rate`}
+            style={{ width: "8.5rem", padding: "0.35rem 0.5rem" }}
+          />
+        )}
+        <button className="btn-ghost" type="button" onClick={() => remove.mutate({ holdingId: h.holdingId })}>
+          Remove
+        </button>
+      </div>
+    </li>
   );
 }
