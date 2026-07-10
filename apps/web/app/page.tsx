@@ -1,71 +1,67 @@
-import { futureValue } from "@atlas/calc-engine";
-import { HoldingTypesDemo } from "./_components/HoldingTypesDemo";
+import { redirect } from "next/navigation";
+import { auth, signOut } from "@/auth";
+import { prisma } from "@/lib/db";
 
-export default function Home() {
-  // Smoke test: exercise the workspace calc-engine from a server component, so a
-  // broken package wiring fails the build instead of surfacing later at runtime.
-  const engineOnline = futureValue(0, 100, 0.12, 12).toFixed(2) === "1268.25";
+export default async function Home() {
+  const session = await auth();
+  if (!session?.user?.id) redirect("/login");
 
+  const member = await prisma.member.findUnique({
+    where: { userId: session.user.id },
+    include: { household: true },
+  });
+  if (!member) redirect("/onboarding");
+
+  const { household } = member;
+
+  async function doSignOut() {
+    "use server";
+    await signOut({ redirectTo: "/login" });
+  }
+
+  // Home state A — "Check-in Pending" (docs/01 §3.3). The check-in wizard that
+  // this CTA launches is the next Phase 1 slice, so the button is inert for now.
   return (
-    <main
-      style={{
-        minHeight: "100dvh",
-        display: "grid",
-        placeItems: "center",
-        padding: "2rem",
-      }}
-    >
-      <div
-        style={{
-          background: "var(--surface)",
-          border: "1px solid var(--border)",
-          borderRadius: "var(--radius)",
-          padding: "2.5rem 2.75rem",
-          maxWidth: "34rem",
-          boxShadow: "0 8px 30px rgba(52, 49, 72, 0.06)",
-        }}
-      >
-        <p
+    <main className="center-shell">
+      <div className="card" style={{ maxWidth: "34rem" }}>
+        <div
           style={{
-            margin: 0,
-            fontSize: "0.8rem",
-            letterSpacing: "0.14em",
-            textTransform: "uppercase",
-            color: "var(--accent)",
-            fontWeight: 600,
+            display: "flex",
+            justifyContent: "space-between",
+            alignItems: "baseline",
+            gap: "1rem",
           }}
         >
-          Project Atlas
-        </p>
-        <h1 style={{ margin: "0.5rem 0 0.75rem", fontSize: "1.9rem", lineHeight: 1.15 }}>
-          Your family&rsquo;s financial mirror
-        </h1>
-        <p style={{ margin: 0, color: "var(--muted)", lineHeight: 1.6 }}>
-          A personal financial operating system. The foundation is being built —
-          a monthly ritual for seeing where you stand, not a transaction tracker.
+          <p className="eyebrow">{household.name}</p>
+          <form action={doSignOut}>
+            <button className="btn-ghost" type="submit">
+              Sign out
+            </button>
+          </form>
+        </div>
+
+        <h1 className="title">You haven&rsquo;t done a check-in yet</h1>
+        <p className="muted" style={{ margin: "0 0 1.5rem", lineHeight: 1.6 }}>
+          A check-in is the monthly ritual at the heart of Atlas — a few minutes
+          to record where {household.name} stands. It takes under five minutes.
         </p>
 
-        <hr style={{ border: 0, borderTop: "1px solid var(--border)", margin: "1.75rem 0" }} />
-
-        <p
-          style={{
-            margin: "0 0 0.6rem",
-            fontSize: "0.72rem",
-            letterSpacing: "0.1em",
-            textTransform: "uppercase",
-            color: "var(--muted)",
-            fontWeight: 600,
-          }}
+        <button
+          className="btn"
+          type="button"
+          disabled
+          title="The check-in wizard lands in the next step"
         >
-          Holding types &mdash; live from Postgres via tRPC
+          Start Financial Check-in
+        </button>
+        <p className="muted" style={{ margin: "0.6rem 0 0", fontSize: "0.75rem", textAlign: "center" }}>
+          The check-in wizard is the next step.
         </p>
-        <HoldingTypesDemo />
 
-        <p style={{ margin: "1.5rem 0 0", fontSize: "0.8rem", color: "var(--muted)" }}>
-          calc-engine:{" "}
-          <span style={{ color: engineOnline ? "var(--accent)" : "crimson", fontWeight: 600 }}>
-            {engineOnline ? "online" : "error"}
-          </span>
+        <hr style={{ border: 0, borderTop: "1px solid var(--border)", margin: "1.5rem 0 1rem" }} />
+        <p className="muted" style={{ margin: 0, fontSize: "0.8rem" }}>
+          Signed in as {session.user.email} · base currency {household.baseCurrency} · check-in day{" "}
+          {household.checkInDay}
         </p>
       </div>
     </main>
