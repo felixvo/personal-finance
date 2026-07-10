@@ -1,43 +1,48 @@
 <title>Atlas — Interactive Mockup</title>
 <style>
   /* ============ Design tokens (from docs/06-design-system.md) ============ */
+  /* chill pastel — soft lavender grounds, periwinkle accent, pastel categoricals */
   :root{
-    --plane:#f9f9f7; --surface:#fcfcfb; --surface-2:#f3f2ee;
-    --ink:#0b0b0b; --ink2:#52514e; --muted:#898781;
-    --grid:#e1e0d9; --axis:#c3c2b7; --border:rgba(11,11,11,.10);
-    --accent:#2a78d6; --accent-ink:#ffffff; --accent-wash:rgba(42,120,214,.10);
-    --good:#0ca30c; --good-ink:#006300; --warn:#fab219; --warn-ink:#8a5a00; --down:#52514e;
-    --cat-1:#2a78d6; --cat-2:#1baf7a; --cat-3:#eda100; --cat-4:#008300;
-    --cat-5:#4a3aa7; --cat-6:#e34948; --cat-7:#e87ba4; --cat-8:#eb6834;
-    --radius:12px; --radius-sm:8px;
+    --plane:#f4f3fb; --surface:#fdfcff; --surface-2:#ecebf7;
+    --ink:#343148; --ink2:#6d6a82; --muted:#9c9ab0;
+    --grid:#e7e5f4; --axis:#d2cfe4; --border:rgba(52,49,72,.12);
+    --accent:#6265d8; --accent-ink:#ffffff; --accent-wash:rgba(98,101,216,.12);
+    --good:#3ea777; --good-ink:#2c7a55; --warn:#e0a94e; --warn-ink:#8a5c16; --down:#6d6a82;
+    --cat-1:#7fb0e6; --cat-2:#5fc4ac; --cat-3:#e6c46a; --cat-4:#84c58c;
+    --cat-5:#a99ceb; --cat-6:#e79aa1; --cat-7:#e6a6cf; --cat-8:#efb088;
+    --shadow:0 2px 10px rgba(72,64,110,.06);
+    --radius:16px; --radius-sm:10px;
     --sans:system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;
   }
   @media (prefers-color-scheme:dark){:root{
-    --plane:#0d0d0d; --surface:#1a1a19; --surface-2:#242422;
-    --ink:#ffffff; --ink2:#c3c2b7; --muted:#898781;
-    --grid:#2c2c2a; --axis:#383835; --border:rgba(255,255,255,.10);
-    --accent:#3987e5; --accent-wash:rgba(57,135,229,.16);
-    --good:#0ca30c; --good-ink:#0ca30c; --warn:#fab219; --warn-ink:#fab219; --down:#c3c2b7;
-    --cat-1:#3987e5; --cat-2:#199e70; --cat-3:#c98500; --cat-4:#008300;
-    --cat-5:#9085e9; --cat-6:#e66767; --cat-7:#d55181; --cat-8:#d95926;
+    --plane:#17151f; --surface:#211f2c; --surface-2:#2c2a3a;
+    --ink:#f1eff8; --ink2:#b9b6cc; --muted:#847f9a;
+    --grid:#302d3e; --axis:#403c52; --border:rgba(255,255,255,.10);
+    --accent:#9b9ef0; --accent-ink:#1b1926; --accent-wash:rgba(155,158,240,.18);
+    --good:#5fc78d; --good-ink:#5fc78d; --warn:#e6b45a; --warn-ink:#e6b45a; --down:#b9b6cc;
+    --cat-1:#7cb0e8; --cat-2:#57c6ac; --cat-3:#d9bb61; --cat-4:#7ec085;
+    --cat-5:#ab9ef0; --cat-6:#e58f96; --cat-7:#df9ec8; --cat-8:#eaa77f;
+    --shadow:0 2px 12px rgba(0,0,0,.28);
   }}
   :root[data-theme="light"]{
-    --plane:#f9f9f7; --surface:#fcfcfb; --surface-2:#f3f2ee;
-    --ink:#0b0b0b; --ink2:#52514e; --muted:#898781;
-    --grid:#e1e0d9; --axis:#c3c2b7; --border:rgba(11,11,11,.10);
-    --accent:#2a78d6; --accent-wash:rgba(42,120,214,.10);
-    --good:#0ca30c; --good-ink:#006300; --warn:#fab219; --warn-ink:#8a5a00; --down:#52514e;
-    --cat-1:#2a78d6; --cat-2:#1baf7a; --cat-3:#eda100; --cat-4:#008300;
-    --cat-5:#4a3aa7; --cat-6:#e34948; --cat-7:#e87ba4; --cat-8:#eb6834;
+    --plane:#f4f3fb; --surface:#fdfcff; --surface-2:#ecebf7;
+    --ink:#343148; --ink2:#6d6a82; --muted:#9c9ab0;
+    --grid:#e7e5f4; --axis:#d2cfe4; --border:rgba(52,49,72,.12);
+    --accent:#6265d8; --accent-ink:#ffffff; --accent-wash:rgba(98,101,216,.12);
+    --good:#3ea777; --good-ink:#2c7a55; --warn:#e0a94e; --warn-ink:#8a5c16; --down:#6d6a82;
+    --cat-1:#7fb0e6; --cat-2:#5fc4ac; --cat-3:#e6c46a; --cat-4:#84c58c;
+    --cat-5:#a99ceb; --cat-6:#e79aa1; --cat-7:#e6a6cf; --cat-8:#efb088;
+    --shadow:0 2px 10px rgba(72,64,110,.06);
   }
   :root[data-theme="dark"]{
-    --plane:#0d0d0d; --surface:#1a1a19; --surface-2:#242422;
-    --ink:#ffffff; --ink2:#c3c2b7; --muted:#898781;
-    --grid:#2c2c2a; --axis:#383835; --border:rgba(255,255,255,.10);
-    --accent:#3987e5; --accent-wash:rgba(57,135,229,.16);
-    --good:#0ca30c; --good-ink:#0ca30c; --warn:#fab219; --warn-ink:#fab219; --down:#c3c2b7;
-    --cat-1:#3987e5; --cat-2:#199e70; --cat-3:#c98500; --cat-4:#008300;
-    --cat-5:#9085e9; --cat-6:#e66767; --cat-7:#d55181; --cat-8:#d95926;
+    --plane:#17151f; --surface:#211f2c; --surface-2:#2c2a3a;
+    --ink:#f1eff8; --ink2:#b9b6cc; --muted:#847f9a;
+    --grid:#302d3e; --axis:#403c52; --border:rgba(255,255,255,.10);
+    --accent:#9b9ef0; --accent-ink:#1b1926; --accent-wash:rgba(155,158,240,.18);
+    --good:#5fc78d; --good-ink:#5fc78d; --warn:#e6b45a; --warn-ink:#e6b45a; --down:#b9b6cc;
+    --cat-1:#7cb0e8; --cat-2:#57c6ac; --cat-3:#d9bb61; --cat-4:#7ec085;
+    --cat-5:#ab9ef0; --cat-6:#e58f96; --cat-7:#df9ec8; --cat-8:#eaa77f;
+    --shadow:0 2px 12px rgba(0,0,0,.28);
   }
 
   *{box-sizing:border-box}
@@ -86,7 +91,18 @@
   .g2{grid-template-columns:1fr 1fr}
   .g3{grid-template-columns:1fr 1fr 1fr}
   .g4{grid-template-columns:repeat(4,1fr)}
-  .card{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:18px 20px}
+  .card{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:18px 20px;box-shadow:var(--shadow)}
+  /* per-component info marker (hover tooltip + click-to-toast on touch) */
+  .info{display:inline-grid;place-items:center;width:16px;height:16px;border-radius:50%;
+    border:1.5px solid var(--muted);color:var(--muted);font-size:10px;font-weight:800;line-height:1;
+    margin-left:6px;vertical-align:middle;cursor:help;position:relative;user-select:none;flex:none}
+  .info:hover,.info:focus-visible{border-color:var(--accent);color:var(--accent);outline:none}
+  .info:hover::after,.info:focus-visible::after{content:attr(data-tip);position:absolute;bottom:calc(100% + 9px);
+    left:50%;transform:translateX(-50%);width:230px;background:var(--ink);color:var(--plane);
+    padding:9px 12px;border-radius:10px;font-size:12px;font-weight:500;line-height:1.45;text-align:left;
+    letter-spacing:0;box-shadow:0 8px 24px rgba(0,0,0,.28);z-index:40;pointer-events:none;white-space:normal}
+  .info:hover::before,.info:focus-visible::before{content:"";position:absolute;bottom:calc(100% + 4px);left:50%;
+    transform:translateX(-50%);border:5px solid transparent;border-top-color:var(--ink);z-index:40}
   .card h2{font-size:14px;font-weight:600;margin:0 0 2px;color:var(--ink)}
   .card .hint{color:var(--muted);font-size:12.5px}
   .tile .label{color:var(--ink2);font-size:13px;font-weight:500}
@@ -320,6 +336,7 @@ const $ = s=>document.querySelector(s);
 const byId = (arr,id)=>arr.find(x=>x.id===id);
 const type = slug=>byId(DB.holdingTypes,slug);
 const esc = s=>String(s).replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
+const info = tip=>`<span class="info" data-action="info" data-tip="${esc(tip)}" tabindex="0" role="button" aria-label="What is this component?">i</span>`;
 function fmtC(n){ // compact base-currency magnitude
   const a=Math.abs(n),s=n<0?"-":"";
   if(a>=1e9) return s+(a/1e9).toFixed(2).replace(/\.?0+$/,"")+"B";
@@ -588,7 +605,7 @@ function viewHome(){
     : `<div class="page-head"><div><div class="eyebrow">${periodLabel(CUR_PERIOD)}</div>
         <h1>Welcome back, ${esc(DB.household.name)}</h1></div></div>
       <div class="banner" style="align-items:center;justify-content:space-between;gap:14px;margin-bottom:22px">
-        <div><div style="font-weight:600;font-size:15px">${cs==="draft"?`Your ${monthWord} check-in is in progress`:`It's time for your ${monthWord} check-in`}</div>
+        <div><div style="font-weight:600;font-size:15px">${cs==="draft"?`Your ${monthWord} check-in is in progress`:`It's time for your ${monthWord} check-in`}${info("Your monthly ritual — update balances to log this month. This nudge shows until the snapshot is completed.")}</div>
           <div class="muted" style="font-size:13px;margin-top:2px">${cs==="draft"?"Pick up where you left off — about 5 minutes.":"Update your balances to log this month. Takes about 5 minutes."}</div></div>
         <div class="row" style="flex:none">${cs==="draft"?`<button class="link" data-action="discard">Discard</button>`:""}
           <button class="btn pri" data-action="${cs==="draft"?"resume":"start"}">${cs==="draft"?"Resume Check-in":"Start Check-in"} →</button></div></div>`;
@@ -597,17 +614,17 @@ function viewHome(){
 
   const heroCard = `<div class="card" style="margin-bottom:16px">
       <div class="row" style="justify-content:space-between;align-items:flex-start;gap:16px">
-        <div class="hero"><div class="label muted">Net worth${isDash?"":` · as of ${periodShort(latest.period)}`}</div>
+        <div class="hero"><div class="label muted">Net worth${isDash?"":` · as of ${periodShort(latest.period)}`}${info("Total assets minus liabilities, in your base currency (VND). The line tracks it across your last 12 check-ins.")}</div>
           <div class="val num">${vnd(m.netWorth)}</div>
           <div class="row" style="margin-top:6px">${deltaEl(m.netWorth,pm&&pm.netWorth)}</div></div>
         <div class="muted" style="font-size:12px;text-align:right;white-space:nowrap">${c.length} months tracked</div></div>
       <div style="margin-top:10px">${netWorthTrend()}</div></div>`;
 
   const tiles = `<div class="grid g4" style="margin-bottom:16px">
-      ${tile("Passive income",vnd(m.passive)+" / mo",deltaEl(m.passive,pm&&pm.passive))}
-      ${tile("Investable assets",vnd(m.investable),deltaEl(m.investable,pm&&pm.investable))}
-      ${tile("Cash position",vnd(m.cash),deltaEl(m.cash,pm&&pm.cash))}
-      ${tile("Savings rate",m.savings==null?"—":(m.savings*100).toFixed(0)+"%",pm?savingsDelta(m.savings,pm.savings):"")}</div>`;
+      ${tile("Passive income",vnd(m.passive)+" / mo",deltaEl(m.passive,pm&&pm.passive),"Income that doesn't need active work — rent, dividends — totalled for the month.")}
+      ${tile("Investable assets",vnd(m.investable),deltaEl(m.investable,pm&&pm.investable),"Assets you could readily redeploy: brokerage, crypto, retirement. Excludes property and cash.")}
+      ${tile("Cash position",vnd(m.cash),deltaEl(m.cash,pm&&pm.cash),"Liquid balances across your bank accounts.")}
+      ${tile("Savings rate",m.savings==null?"—":(m.savings*100).toFixed(0)+"%",pm?savingsDelta(m.savings,pm.savings):"","(Income − expenses) ÷ income for the month. Shown as — when there's no income.")}</div>`;
 
   const goalsMini=DB.goals.filter(g=>g.status==="ACTIVE").slice(0,3).map(g=>{
     const p=goalProgress(g);return `<div style="margin-bottom:12px">
@@ -616,9 +633,9 @@ function viewHome(){
       <div class="meter"><div class="fill" style="width:${(p.pct*100).toFixed(1)}%"></div></div></div>`;}).join("");
 
   const bottom = `<div class="grid g2">
-      <div class="card"><h2>Asset allocation</h2><div class="hint" style="margin-bottom:14px">Where the money sits, by type</div>
+      <div class="card"><h2>Asset allocation${info("Share of your assets by type. Bar length encodes proportion; the legend shows each percentage.")}</h2><div class="hint" style="margin-bottom:14px">Where the money sits, by type</div>
         ${allocBar(assetAllocation(latest))}</div>
-      <div class="card"><h2>Goal progress</h2><div class="hint" style="margin-bottom:14px">Toward your targets</div>
+      <div class="card"><h2>Goal progress${info("Each active goal's current value ÷ its target. Open Goals for pace and projected completion.")}</h2><div class="hint" style="margin-bottom:14px">Toward your targets</div>
         ${goalsMini||'<p class="muted">No goals yet.</p>'}
         <button class="link" data-nav="goals" style="padding-left:0">View all goals →</button></div></div>`;
 
@@ -627,8 +644,8 @@ function viewHome(){
 function savingsDelta(cur,prev){if(prev==null||cur==null)return "";const d=(cur-prev)*100;
   if(Math.abs(d)<.5)return `<span class="delta neutral">— no change</span>`;
   return `<span class="delta ${d>0?"good":"down"}">${d>0?"▲":"▼"} ${Math.abs(d).toFixed(0)}pp<span class="muted" style="font-weight:500"> vs last mo</span></span>`;}
-function tile(label,val,delta){return `<div class="card tile" style="padding:16px 18px">
-  <div class="label">${label}</div><div class="val num">${val}</div>
+function tile(label,val,delta,tip){return `<div class="card tile" style="padding:16px 18px">
+  <div class="label">${label}${tip?info(tip):""}</div><div class="val num">${val}</div>
   <div class="row" style="margin-top:6px">${delta||""}</div></div>`;}
 function daysAgo(period){const[y,m]=period.split("-").map(Number);const d=new Date(y,m,1); // end of that month-ish
   const diff=Math.round((TODAY-new Date(y,m-1,28))/864e5);return diff>0?diff+" days ago":"recently";}
@@ -656,12 +673,12 @@ function viewAssets(){
       <div class="sub">Every place the family's money is stored — ${periodShort(snap.period)}</div></div>
       <button class="btn pri" data-action="add-holding">+ Add holding</button></div>
     <div class="grid g2" style="margin-bottom:8px">
-      <div class="card"><h2>Asset allocation</h2><div class="hint" style="margin-bottom:14px">By holding type</div>${allocBar(assetAllocation(snap))}</div>
-      <div class="card"><h2>Currency allocation</h2><div class="hint" style="margin-bottom:14px">By denomination (crypto counts as its own unit)</div>${allocBar(currencyAllocation(snap))}</div>
+      <div class="card"><h2>Asset allocation${info("Share of your assets by type (cash, brokerage, real estate…). Length encodes proportion; the legend shows each %.")}</h2><div class="hint" style="margin-bottom:14px">By holding type</div>${allocBar(assetAllocation(snap))}</div>
+      <div class="card"><h2>Currency allocation${info("Share of assets by denomination. Foreign currency and crypto are each counted in their own unit, then converted to VND.")}</h2><div class="hint" style="margin-bottom:14px">By denomination (crypto counts as its own unit)</div>${allocBar(currencyAllocation(snap))}</div>
     </div>
     <div class="card" style="margin-bottom:16px">
       <div class="row" style="justify-content:space-between;align-items:center;margin-bottom:12px;gap:12px">
-        <div><h2>How each asset changes over time</h2><div class="hint">Across your last ${completedSorted().length} check-ins${DB.draft?" (this month's draft not counted yet)":""}</div></div>
+        <div><h2>How each asset changes over time${info("Each holding's value across your check-ins. 'By asset' gives every holding its own scale; 'Stacked total' shows how they compose your assets.")}</h2><div class="hint">Across your last ${completedSorted().length} check-ins${DB.draft?" (this month's draft not counted yet)":""}</div></div>
         <div class="seg-toggle">
           <button class="${state.trendMode!=="stacked"?"active":""}" data-action="trend-mode" data-id="byasset">By asset</button>
           <button class="${state.trendMode==="stacked"?"active":""}" data-action="trend-mode" data-id="stacked">Stacked total</button>
@@ -669,7 +686,7 @@ function viewAssets(){
       ${trendPanel()}
     </div>
     <div class="card">${assetGroups.map(grp).join("")}
-      ${liabGroups.length?`<div style="margin-top:22px"><div class="eyebrow" style="color:var(--cat-6)">Liabilities</div>${liabGroups.map(grp).join("")}</div>`:""}</div>`;
+      ${liabGroups.length?`<div style="margin-top:22px"><div class="eyebrow" style="color:var(--cat-6)">Liabilities${info("Debts — loans, credit cards — subtracted from net worth. Shown apart from assets so the math reads clearly.")}</div>${liabGroups.map(grp).join("")}</div>`:""}</div>`;
 }
 
 /* ---------- GOALS ---------- */
@@ -684,7 +701,7 @@ function viewGoals(){
       <div class="row" style="justify-content:space-between"><span class="num muted" style="font-size:13px">${vnd(p.tracked)} / ${vnd(g.target)}</span>
         <span class="num" style="font-weight:600">${(p.pct*100).toFixed(0)}%</span></div>
       <div class="muted" style="font-size:12.5px;margin-top:8px">${projText(pj)}</div></div>`;}).join("");
-  return `<div class="page-head"><div><h1>Goals</h1><div class="sub">How long until you reach them, at your current pace</div></div>
+  return `<div class="page-head"><div><h1>Goals</h1><div class="sub">How long until you reach them, at your current pace${info("Progress toward each target, with projected completion from a moving average of your recent monthly change.")}</div></div>
       <button class="btn pri" data-action="add-goal">+ New goal</button></div>
     <div class="grid">${list||emptyState("No goals","Create one to start tracking pace.")}</div>`;
 }
@@ -716,7 +733,7 @@ function viewGoalDetail(){
       ${tile("Target",vnd(g.target),"")}
       ${tile("Progress",(p.pct*100).toFixed(0)+"%",g.targetDate?`<span class="muted" style="font-size:12px">by ${periodShort(g.targetDate)}</span>`:"")}
     </div>
-    <div class="card"><h2>Trajectory</h2><div class="hint" style="margin-bottom:6px">Actual (solid) and projected pace (dashed) toward target</div>
+    <div class="card"><h2>Trajectory${info("Your tracked value over time (solid) and projected pace (dashed) toward the target (green line).")}</h2><div class="hint" style="margin-bottom:6px">Actual (solid) and projected pace (dashed) toward target</div>
       ${lineChart(series,{projection:proj.length>1?proj:null,target:g.target})}
       <div class="muted" style="font-size:12.5px;margin-top:10px">${projText(pj)}${g.mode==="HOLDING_SUBSET"?` · tracking ${g.holdingIds.map(id=>esc(byId(DB.holdings,id).name)).join(", ")}`:""}</div></div>`;
 }
@@ -727,7 +744,7 @@ function viewWhatIf(){
   const tabs=[["future","Future Value"],["compound","Compound Interest"],["mortgage","Mortgage"],
     ["retire","Retirement"],["goal","Goal Projection"]];
   const tabHtml=tabs.map(([id,l])=>`<button class="${state.wf===id?"active":""}" data-action="wf-tab" data-id="${id}">${l}</button>`).join("");
-  return `<div class="page-head"><div><h1>What If…</h1><div class="sub">Explore outcomes. Atlas shows the numbers — never a recommendation.</div></div></div>
+  return `<div class="page-head"><div><h1>What If…</h1><div class="sub">Explore outcomes. Atlas shows the numbers — never a recommendation.${info("Hypothetical projections from inputs you choose. Nothing is saved, and Atlas never tells you what to do — it only shows the math.")}</div></div></div>
     <div class="tabs">${tabHtml}</div>
     <div class="card"><div class="wf" id="wf-root">${wfBody(nw)}</div></div>`;
 }
@@ -795,7 +812,7 @@ function viewTimeline(){
         <span>Savings rate <b>${m.savings==null?"—":(m.savings*100).toFixed(0)+"%"}</b></span>
         <span>Passive <b>${vnd(m.passive)}</b></span></div>
       ${s.notes?`<div class="note-q">“${esc(s.notes)}”</div>`:""}</div>`;}).join("");
-  return `<div class="page-head"><div><h1>Timeline</h1><div class="sub">The family's financial journal — one entry per month</div></div></div>
+  return `<div class="page-head"><div><h1>Timeline</h1><div class="sub">The family's financial journal — one entry per month${info("One entry per completed month. Click any to view or correct it; an 'edited' tag marks a snapshot changed after completion.")}</div></div></div>
     ${cards||emptyState("No snapshots yet","Complete a check-in to start your timeline.")}`;
 }
 
@@ -813,7 +830,7 @@ function viewSettings(){
         <p class="muted" style="font-size:13px;margin:2px 0 14px">This is a mockup — data lives in memory only and resets on refresh.</p>
         <div class="row"><button class="btn" data-action="theme">Toggle light / dark</button>
         <button class="btn danger" data-action="reset">Reset demo data</button></div></div>
-      <div class="card" style="grid-column:1/-1"><h2>Holding types</h2>
+      <div class="card" style="grid-column:1/-1"><h2>Holding types${info("The categories a holding can take. Global seed types are shared; custom types you add are private to your household.")}</h2>
         <div class="hint" style="margin-bottom:10px">Global seed types are shared; custom types are private to this household.</div>
         ${DB.holdingTypes.map(t=>`<div class="hrow"><span class="sw" style="width:9px;height:9px;border-radius:2px;background:${colorForType(t.slug)}"></span>
           <div class="nm">${esc(t.label)} <span class="muted" style="font-size:12px">${t.cls==="ASSET"?"asset":"liability"}${t.household?" · custom":""}</span></div>
@@ -866,7 +883,7 @@ function wzStep(){
       <div style="margin-top:16px">${holdingSummaryList()}</div>`;
   }
   if(wz.step===1){ // update holdings
-    return `<h3>Update your holdings</h3><p class="lead">Change the current value of anything that moved. Crypto is entered as coin quantity × unit price.</p>
+    return `<h3>Update your holdings${info("Values are pre-filled from last month — edit only what changed. Non-VND holdings take an amount plus a unit price.")}</h3><p class="lead">Change the current value of anything that moved. Crypto is entered as coin quantity × unit price.</p>
       ${holdingEditor()}`;
   }
   if(wz.step===2){ // add / archive
@@ -889,7 +906,7 @@ function wzStep(){
   // step 4 — review & complete
   const m=metrics(d);const base=completedSorted().slice(-1)[0];const pm=base?metrics(base):null;
   const line=(k,v,delta)=>`<div class="rvw"><span class="k">${k}</span><span class="v"><span class="num">${v}</span>${delta||""}</span></div>`;
-  return `<h3>Review ${periodLabel(CUR_PERIOD)}</h3><p class="lead">This is the moment that answers “did we stay on track?”</p>
+  return `<h3>Review ${periodLabel(CUR_PERIOD)}${info("Every figure with its change vs last month — the moment that answers 'did we stay on track?' Confirm to save the snapshot.")}</h3><p class="lead">This is the moment that answers “did we stay on track?”</p>
     ${line("Net worth",vnd(m.netWorth),deltaEl(m.netWorth,pm&&pm.netWorth))}
     ${line("Cash position",vnd(m.cash),deltaEl(m.cash,pm&&pm.cash))}
     ${line("Investable assets",vnd(m.investable),deltaEl(m.investable,pm&&pm.investable))}
@@ -983,8 +1000,8 @@ function openSnapshotEditor(id){
    EVENTS
    ===================================================================== */
 let toastT;
-function toast(msg){const t=$("#toast");t.textContent=msg;t.classList.add("show");
-  clearTimeout(toastT);toastT=setTimeout(()=>t.classList.remove("show"),2200);}
+function toast(msg,ms){const t=$("#toast");t.textContent=msg;t.classList.add("show");
+  clearTimeout(toastT);toastT=setTimeout(()=>t.classList.remove("show"),ms||2200);}
 function setTheme(){const cur=document.documentElement.getAttribute("data-theme");
   const sysDark=matchMedia("(prefers-color-scheme:dark)").matches;
   const next=cur?(cur==="dark"?"light":"dark"):(sysDark?"light":"dark");
@@ -1011,6 +1028,7 @@ document.addEventListener("click",e=>{
   if(nav){state.view=nav;state.goalId=null;render();return;}
   switch(a){
     case "theme":setTheme();break;
+    case "info":toast(t.dataset.tip,5000);break;
     case "start":startCheckin();break;
     case "resume":resumeCheckin();break;
     case "discard":DB.draft=null;render();toast("Draft discarded");break;
