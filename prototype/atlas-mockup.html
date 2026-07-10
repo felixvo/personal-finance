@@ -346,18 +346,31 @@ const byId = (arr,id)=>arr.find(x=>x.id===id);
 const type = slug=>byId(DB.holdingTypes,slug);
 const esc = s=>String(s).replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
 const info = tip=>`<span class="info" data-action="info" data-tip="${esc(tip)}" tabindex="0" role="button" aria-label="What is this component?">i</span>`;
-function fmtC(n){ // compact base-currency magnitude
+function fmtC(n){ // compact magnitude
   const a=Math.abs(n),s=n<0?"-":"";
   if(a>=1e9) return s+(a/1e9).toFixed(2).replace(/\.?0+$/,"")+"B";
   if(a>=1e6) return s+(a/1e6).toFixed(a>=1e8?0:1).replace(/\.0$/,"")+"M";
-  if(a>=1e3) return s+Math.round(a/1e3)+"K";
+  if(a>=1e3) return s+(a/1e3).toFixed(a>=1e4?0:1).replace(/\.0$/,"")+"K";
   return s+Math.round(a);
 }
-const vnd = n=>fmtC(n)+" ₫";
+// base-currency options. vndPer = how many VND make 1 unit — used only when re-basing.
+const CURRENCIES={VND:{sym:"₫",pre:false,vndPer:1},USD:{sym:"$",pre:true,vndPer:25100},
+  EUR:{sym:"€",pre:true,vndPer:27200},SGD:{sym:"S$",pre:true,vndPer:19000},JPY:{sym:"¥",pre:true,vndPer:170}};
+function money(n){const c=CURRENCIES[DB.household.base]||CURRENCIES.VND,neg=n<0,s=fmtC(Math.abs(n));
+  return c.pre?(neg?"-":"")+c.sym+s:(neg?"-":"")+s+" "+c.sym;}
 const full = n=>Math.round(n).toLocaleString("en-US");
-function nativeStr(h,val){ if(h.cur==="VND")return null;
+function nativeStr(h,val){ if(h.cur===DB.household.base)return null;
   if(h.cur==="BTC")return (+val).toLocaleString("en-US",{maximumFractionDigits:8})+" BTC";
   return full(val)+" "+h.cur; }
+// re-base: re-express every stored rate, cash-flow and goal target in the new currency
+function setBaseCurrency(newBase){
+  const old=DB.household.base; if(newBase===old||!CURRENCIES[newBase])return;
+  const factor=CURRENCIES[old].vndPer/CURRENCIES[newBase].vndPer;    // new-base units per old-base unit
+  const scale=s=>{for(const k in s.values)s.values[k][1]*=factor; for(const f of s.flows)f.amount*=factor;};
+  DB.snapshots.forEach(scale); if(DB.draft)scale(DB.draft);
+  DB.goals.forEach(g=>g.target*=factor);
+  DB.household.base=newBase;
+}
 function periodLabel(p){const[y,m]=p.split("-");return new Date(+y,+m-1,1)
   .toLocaleDateString("en-US",{month:"long",year:"numeric"});}
 function periodShort(p){const[y,m]=p.split("-");return new Date(+y,+m-1,1)
@@ -508,7 +521,7 @@ function trendTile(h){
     <div class="row" style="justify-content:space-between;align-items:flex-start;gap:6px">
       <div><div class="tt">${esc(h.name)}</div><div class="muted" style="font-size:11.5px">${t.label}</div></div>
       <span class="sw" style="width:9px;height:9px;border-radius:2px;background:${colorForType(h.type)};margin-top:4px;flex:none"></span></div>
-    <div class="tv">${vnd(last)}</div>
+    <div class="tv">${money(last)}</div>
     <div>${deltaEl(last,first,{suffix:" since "+periodShort(series[0].p)})}</div>
     <div style="margin-top:6px">${miniTrend(series)}</div></div>`;
 }
@@ -549,7 +562,7 @@ function deltaEl(cur,prev,opts={}){ if(prev==null||prev===undefined)return "";
   const arrow=d>0?"▲":"▼"; let cls;
   if(opts.neutral)cls="neutral"; else{const good=opts.invert?d<0:d>0; cls=good?"good":"down";}
   const suffix=opts.suffix||" vs last mo";
-  return `<span class="delta ${cls}">${arrow} ${vnd(Math.abs(d))}${opts.hideSuffix?"":`<span class="muted" style="font-weight:500">${suffix}</span>`}</span>`;}
+  return `<span class="delta ${cls}">${arrow} ${money(Math.abs(d))}${opts.hideSuffix?"":`<span class="muted" style="font-weight:500">${suffix}</span>`}</span>`;}
 
 /* ---------- allocation datasets ---------- */
 function assetAllocation(snap){
@@ -641,15 +654,15 @@ function viewHome(){
   const heroCard = `<div class="card" style="margin-bottom:16px">
       <div class="row" style="justify-content:space-between;align-items:flex-start;gap:16px">
         <div class="hero"><div class="label muted">Net worth${isDash?"":` · as of ${periodShort(latest.period)}`}${info("Total assets minus liabilities, in your base currency (VND). The line tracks it across your last 12 check-ins.")}</div>
-          <div class="val num">${vnd(m.netWorth)}</div>
+          <div class="val num">${money(m.netWorth)}</div>
           <div class="row" style="margin-top:6px">${deltaEl(m.netWorth,pm&&pm.netWorth)}</div></div>
         <div class="muted" style="font-size:12px;text-align:right;white-space:nowrap">${c.length} months tracked</div></div>
       <div style="margin-top:10px">${netWorthTrend()}</div></div>`;
 
   const tiles = `<div class="grid g4" style="margin-bottom:16px">
-      ${tile("Passive income",vnd(m.passive)+" / mo",deltaEl(m.passive,pm&&pm.passive),"Income that doesn't need active work — rent, dividends — totalled for the month.")}
-      ${tile("Investable assets",vnd(m.investable),deltaEl(m.investable,pm&&pm.investable),"Assets you could readily redeploy: brokerage, crypto, retirement. Excludes property and cash.")}
-      ${tile("Cash position",vnd(m.cash),deltaEl(m.cash,pm&&pm.cash),"Liquid balances across your bank accounts.")}
+      ${tile("Passive income",money(m.passive)+" / mo",deltaEl(m.passive,pm&&pm.passive),"Income that doesn't need active work — rent, dividends — totalled for the month.")}
+      ${tile("Investable assets",money(m.investable),deltaEl(m.investable,pm&&pm.investable),"Assets you could readily redeploy: brokerage, crypto, retirement. Excludes property and cash.")}
+      ${tile("Cash position",money(m.cash),deltaEl(m.cash,pm&&pm.cash),"Liquid balances across your bank accounts.")}
       ${tile("Savings rate",m.savings==null?"—":(m.savings*100).toFixed(0)+"%",pm?savingsDelta(m.savings,pm.savings):"","(Income − expenses) ÷ income for the month. Shown as — when there's no income.")}</div>`;
 
   const goalsMini=DB.goals.filter(g=>g.status==="ACTIVE").slice(0,3).map(g=>{
@@ -688,11 +701,11 @@ function viewAssets(){
   const liabGroups=order.filter(id=>type(id).cls==="LIABILITY");
   const grp=id=>{const t=type(id);const sum=groups[id].reduce((s,x)=>s+x.bv,0)*(t.cls==="LIABILITY"?-1:1);
     return `<div class="grp"><div class="grp-head"><span class="gname" style="color:${colorForType(id)}">${t.label}</span>
-      <span class="gsum num">${vnd(sum)}</span></div>
+      <span class="gsum num">${money(sum)}</span></div>
       ${groups[id].map(({h,bv,v})=>`<div class="hrow">
         <span class="sw legend-sw" style="width:9px;height:9px;border-radius:2px;background:${colorForType(id)}"></span>
         <div class="nm">${esc(h.name)}<div class="sub">${esc(h.inst||t.label)}</div></div>
-        <div class="amt">${vnd(bv)}${nativeStr(h,v?v[0]:0)?`<div class="native num">${nativeStr(h,v[0])} @ ${full(v[1])}</div>`:""}</div>
+        <div class="amt">${money(bv)}${nativeStr(h,v?v[0]:0)?`<div class="native num">${nativeStr(h,v[0])} @ ${full(v[1])}</div>`:""}</div>
         <div class="act"><button class="link" data-action="hist" data-id="${h.id}">History</button>
           <button class="link" data-action="archive" data-id="${h.id}">Archive</button></div></div>`).join("")}</div>`;};
   return `<div class="page-head"><div><h1>Assets</h1>
@@ -724,7 +737,7 @@ function viewGoals(){
         <span class="muted" style="font-size:12.5px;margin-left:8px">${g.mode==="NET_WORTH"?"Whole net worth":"Linked holdings"}</span></div>
         ${projPill(pj)}</div>
       <div class="meter" style="height:11px"><div class="fill" style="width:${(p.pct*100).toFixed(1)}%"></div></div>
-      <div class="row" style="justify-content:space-between"><span class="num muted" style="font-size:13px">${vnd(p.tracked)} / ${vnd(g.target)}</span>
+      <div class="row" style="justify-content:space-between"><span class="num muted" style="font-size:13px">${money(p.tracked)} / ${money(g.target)}</span>
         <span class="num" style="font-weight:600">${(p.pct*100).toFixed(0)}%</span></div>
       <div class="muted" style="font-size:12.5px;margin-top:8px">${projText(pj)}</div></div>`;}).join("");
   return `<div class="page-head"><div><h1>Goals</h1><div class="sub">How long until you reach them, at your current pace${info("Progress toward each target, with projected completion from a moving average of your recent monthly change.")}</div></div>
@@ -742,7 +755,7 @@ function projText(pj){
   if(pj.status==="achieved")return "Target reached — congratulations.";
   if(pj.status==="insufficient-data")return "Need two check-ins to project pace.";
   if(pj.status==="not-on-pace")return "Flat or shrinking — no forward estimate.";
-  return `Est. completion ${periodShort(pj.date)} · pace ${vnd(pj.pace)}/mo`;}
+  return `Est. completion ${periodShort(pj.date)} · pace ${money(pj.pace)}/mo`;}
 
 function viewGoalDetail(){
   const g=byId(DB.goals,state.goalId);const p=goalProgress(g),pj=goalProjection(g);
@@ -755,8 +768,8 @@ function viewGoalDetail(){
       <h1 style="margin-top:4px">${esc(g.name)}</h1></div>
       <div class="row">${projPill(pj)}<button class="btn sm" data-action="del-goal" data-id="${g.id}">Delete</button></div></div>
     <div class="grid g3" style="margin-bottom:16px">
-      ${tile("Current",vnd(p.tracked),"")}
-      ${tile("Target",vnd(g.target),"")}
+      ${tile("Current",money(p.tracked),"")}
+      ${tile("Target",money(g.target),"")}
       ${tile("Progress",(p.pct*100).toFixed(0)+"%",g.targetDate?`<span class="muted" style="font-size:12px">by ${periodShort(g.targetDate)}</span>`:"")}
     </div>
     <div class="card"><h2>Trajectory${info("Your tracked value over time (solid) and projected pace (dashed) toward the target (green line).")}</h2><div class="hint" style="margin-bottom:6px">Actual (solid) and projected pace (dashed) toward target</div>
@@ -788,9 +801,9 @@ function wfBody(nw){
     return `<div>${wfNum("price","Loan amount (₫)",s.price,1000000)}
       ${wfNum("rate","Annual interest rate",s.rate,.1,"% — nominal, compounded monthly")}
       ${wfNum("years","Term (years)",s.years,1)}</div>
-      <div><div class="kv"><span>Monthly payment</span><span class="v">${vnd(r.payment)}</span></div>
-      <div class="kv"><span>Total interest paid</span><span class="v">${vnd(r.interest)}</span></div>
-      <div class="kv"><span>Total repaid</span><span class="v">${vnd(r.total)}</span></div>
+      <div><div class="kv"><span>Monthly payment</span><span class="v">${money(r.payment)}</span></div>
+      <div class="kv"><span>Total interest paid</span><span class="v">${money(r.interest)}</span></div>
+      <div class="kv"><span>Total repaid</span><span class="v">${money(r.total)}</span></div>
       <h2 style="margin:18px 0 2px;font-size:14px">Balance paydown</h2>${lineChart(series,{})}</div>`;}
   if(t==="retire"){const target=s.spend/(s.wr/100);const n=solveMonths(s.pv,s.pmt,s.rate/100,target);
     const proj=projSeries(s.pv,s.pmt,s.rate/100,Math.min(n,600));
@@ -799,7 +812,7 @@ function wfBody(nw){
       ${wfNum("pv","Current amount (₫)",s.pv,1000000,"pre-filled from net worth")}
       ${wfNum("pmt","Monthly contribution (₫)",s.pmt,1000000)}
       ${wfNum("rate","Expected annual return",s.rate,.1,"%")}</div>
-      <div><div class="kv"><span>Required nest egg</span><span class="v">${vnd(target)}</span></div>
+      <div><div class="kv"><span>Required nest egg</span><span class="v">${money(target)}</span></div>
       ${solveOut(n)}<h2 style="margin:18px 0 2px;font-size:14px">Path to target</h2>${lineChart(proj,{target})}</div>`;}
   if(t==="goal"){const n=solveMonths(s.pv,s.pmt,s.rate/100,s.target);
     const proj=projSeries(s.pv,s.pmt,s.rate/100,Math.min(isFinite(n)?n:240,600));
@@ -815,9 +828,9 @@ function wfBody(nw){
     ${t==="future"?wfNum("pmt","Monthly contribution (₫)",s.pmt,1000000):""}
     ${wfNum("rate","Expected annual return",s.rate,.1,"%")}
     ${wfNum("years","Years",s.years,1)}</div>
-    <div><div class="kv"><span>Value in ${s.years} years</span><span class="v">${vnd(F)}</span></div>
-    <div class="kv"><span>Total contributed</span><span class="v">${vnd(contrib)}</span></div>
-    <div class="kv"><span>Growth</span><span class="v">${vnd(F-contrib)}</span></div>
+    <div><div class="kv"><span>Value in ${s.years} years</span><span class="v">${money(F)}</span></div>
+    <div class="kv"><span>Total contributed</span><span class="v">${money(contrib)}</span></div>
+    <div class="kv"><span>Growth</span><span class="v">${money(F-contrib)}</span></div>
     <h2 style="margin:18px 0 2px;font-size:14px">Projected growth</h2>${lineChart(proj,{})}</div>`;
 }
 function projSeries(pv,pmt,rA,months){const out=[];const step=Math.max(1,Math.ceil(months/48));
@@ -834,9 +847,9 @@ function viewTimeline(){
     return `<div class="tl-card" data-action="open-snap" data-id="${s.id}">
       <div class="row" style="justify-content:space-between"><span style="font-weight:600;font-size:15px">${periodLabel(s.period)}</span>
         ${s.version>1?`<span class="pill neutral">edited · v${s.version}</span>`:""}</div>
-      <div class="m"><span>Net worth <b>${vnd(m.netWorth)}</b></span>
+      <div class="m"><span>Net worth <b>${money(m.netWorth)}</b></span>
         <span>Savings rate <b>${m.savings==null?"—":(m.savings*100).toFixed(0)+"%"}</b></span>
-        <span>Passive <b>${vnd(m.passive)}</b></span></div>
+        <span>Passive <b>${money(m.passive)}</b></span></div>
       ${s.notes?`<div class="note-q">“${esc(s.notes)}”</div>`:""}</div>`;}).join("");
   return `<div class="page-head"><div><h1>Timeline</h1><div class="sub">The family's financial journal — one entry per month${info("One entry per completed month. Click any to view or correct it; an 'edited' tag marks a snapshot changed after completion.")}</div></div></div>
     ${cards||emptyState("No snapshots yet","Complete a check-in to start your timeline.")}`;
@@ -849,7 +862,8 @@ function viewSettings(){
     <div class="grid g2">
       <div class="card"><h2>Household</h2>
         <div class="kv"><span>Name</span><span class="v">${esc(DB.household.name)}</span></div>
-        <div class="kv"><span>Base currency</span><span class="v">${DB.household.base}</span></div>
+        <div class="kv"><span>Base currency${info("The currency every total is shown in. Changing it re-converts all history — in a real build that needs a live FX source; here it uses a fixed rate table.")}</span>
+          <span class="v"><select data-action="base-cur" style="width:auto;padding:6px 10px">${Object.keys(CURRENCIES).map(c=>`<option value="${c}" ${DB.household.base===c?"selected":""}>${c}</option>`).join("")}</select></span></div>
         <div class="kv"><span>Check-in day</span><span class="v">Day ${DB.household.checkInDay}</span></div>
         <div class="kv"><span>Reminder</span><span class="v">Email</span></div></div>
       <div class="card"><h2>Appearance & data</h2>
@@ -935,11 +949,11 @@ function wzStep(){
   const m=metrics(d);const base=completedSorted().slice(-1)[0];const pm=base?metrics(base):null;
   const line=(k,v,delta)=>`<div class="rvw"><span class="k">${k}</span><span class="v"><span class="num">${v}</span>${delta||""}</span></div>`;
   return `<h3>Review ${periodLabel(CUR_PERIOD)}${info("Every figure with its change vs last month — the moment that answers 'did we stay on track?' Confirm to save the snapshot.")}</h3><p class="lead">This is the moment that answers “did we stay on track?”</p>
-    ${line("Net worth",vnd(m.netWorth),deltaEl(m.netWorth,pm&&pm.netWorth))}
-    ${line("Cash position",vnd(m.cash),deltaEl(m.cash,pm&&pm.cash))}
-    ${line("Investable assets",vnd(m.investable),deltaEl(m.investable,pm&&pm.investable))}
-    ${line("Passive income",vnd(m.passive),deltaEl(m.passive,pm&&pm.passive))}
-    ${line("Monthly invested",vnd(m.invested),"")}
+    ${line("Net worth",money(m.netWorth),deltaEl(m.netWorth,pm&&pm.netWorth))}
+    ${line("Cash position",money(m.cash),deltaEl(m.cash,pm&&pm.cash))}
+    ${line("Investable assets",money(m.investable),deltaEl(m.investable,pm&&pm.investable))}
+    ${line("Passive income",money(m.passive),deltaEl(m.passive,pm&&pm.passive))}
+    ${line("Monthly invested",money(m.invested),"")}
     ${line("Savings rate",m.savings==null?"—":(m.savings*100).toFixed(0)+"%",pm?savingsDelta(m.savings,pm.savings):"")}
     <label class="field" style="margin-top:20px"><span class="lb">Notes (optional)</span>
       <input value="${esc(d.notes||"")}" data-action="draft-note" placeholder="e.g. Returned to Vietnam"></label>`;
@@ -948,7 +962,7 @@ function holdingSummaryList(){const d=DB.draft;
   return DB.holdings.filter(h=>h.status==="ACTIVE").map(h=>{const v=d.values[h.id];const bv=v&&v[0]!=null?v[0]*v[1]:null;
     return `<div class="hrow"><span class="sw" style="width:9px;height:9px;border-radius:2px;background:${colorForType(h.type)}"></span>
       <div class="nm">${esc(h.name)}<div class="sub">${type(h.type).label}</div></div>
-      <div class="amt num">${bv==null?'<span class="muted">— needs entry</span>':vnd(bv)}</div></div>`;}).join("");}
+      <div class="amt num">${bv==null?'<span class="muted">— needs entry</span>':money(bv)}</div></div>`;}).join("");}
 function holdingEditor(){const d=DB.draft;
   const groups={};DB.holdings.filter(h=>h.status==="ACTIVE").forEach(h=>(groups[h.type]=groups[h.type]||[]).push(h));
   return DB.holdingTypes.map(t=>groups[t.id]?`<div class="grp"><div class="grp-head"><span class="gname" style="color:${colorForType(t.slug)}">${t.label}</span></div>
@@ -956,7 +970,7 @@ function holdingEditor(){const d=DB.draft;
       return `<div class="edit-row"><div class="nm" style="flex:none;width:130px">${esc(h.name)}<div class="sub">${h.cur}</div></div>
         <input class="qty num" type="number" step="any" placeholder="amount" value="${v&&v[0]!=null?v[0]:""}" data-action="hv" data-id="${h.id}" data-f="0">
         ${crypto?`<span class="muted" style="font-size:12px;white-space:nowrap" data-rate="${h.id}">× ${v?full(v[1]):"—"}</span>`:""}
-        <span class="bv num" data-bv="${h.id}">${v&&v[0]!=null?vnd(v[0]*v[1]):"—"}</span></div>`;}).join("")}</div>`:"").join("");
+        <span class="bv num" data-bv="${h.id}">${v&&v[0]!=null?money(v[0]*v[1]):"—"}</span></div>`;}).join("")}</div>`:"").join("");
 }
 /* ---- FX rate remembering: one rate per currency, pre-filled from last month ---- */
 function draftCurrencyRate(cur){const d=DB.draft;const h=DB.holdings.find(h=>h.status==="ACTIVE"&&h.cur===cur&&d.values[h.id]);return h?d.values[h.id][1]:1;}
@@ -1017,10 +1031,10 @@ function addHoldingModal(){
   modal(`<h3>Add holding</h3>
     <label class="field"><span class="lb">Name</span><input id="m-name" placeholder="e.g. Techcombank"></label>
     <label class="field"><span class="lb">Type</span><select id="m-type">${opts}</select></label>
-    <label class="field"><span class="lb">Denomination</span><input id="m-cur" value="VND" placeholder="VND, USD, BTC…"></label>
+    <label class="field"><span class="lb">Denomination</span><input id="m-cur" value="${DB.household.base}" placeholder="VND, USD, BTC…"></label>
     <div class="row" style="gap:10px">
       <label class="field" style="flex:1"><span class="lb">Amount (native unit)</span><input id="m-val" class="num" type="number" step="any" value="0"></label>
-      <label class="field" style="flex:1"><span class="lb">Unit price (in ₫)</span><input id="m-rate" class="num" type="number" step="any" value="1"></label></div>
+      <label class="field" style="flex:1"><span class="lb">Unit price (in ${DB.household.base})</span><input id="m-rate" class="num" type="number" step="any" value="1"></label></div>
     <div class="actions"><button class="btn" data-action="modal-close">Cancel</button>
       <button class="btn pri" data-action="add-holding-save">Add holding</button></div>`);
 }
@@ -1031,7 +1045,7 @@ function addGoalModal(){
       <option value="HOUSE_FUND">House Fund</option><option value="EDUCATION_FUND">Education Fund</option>
       <option value="CUSTOM">Custom</option></select></label>
     <label class="field"><span class="lb">Name</span><input id="g-name" placeholder="e.g. FIRE"></label>
-    <label class="field"><span class="lb">Target amount (₫)</span><input id="g-target" class="num" type="number" step="1000000" value="5000000000"></label>
+    <label class="field"><span class="lb">Target amount (${DB.household.base})</span><input id="g-target" class="num" type="number" step="any" value="${Math.round(5e9/CURRENCIES[DB.household.base].vndPer)}"></label>
     <label class="field"><span class="lb">Tracks</span><select id="g-mode">
       <option value="NET_WORTH">Whole net worth</option><option value="HOLDING_SUBSET">Specific holding</option></select></label>
     <label class="field"><span class="lb">Linked holding (if specific)</span><select id="g-hold">
@@ -1067,7 +1081,7 @@ function openSnapshotEditor(id){
     return `<div class="edit-row"><div class="nm" style="flex:none;width:120px">${esc(h.name)}<div class="sub">${h.cur}</div></div>
       <input class="qty num" type="number" step="any" value="${v[0]}" data-action="ev" data-id="${h.id}" data-f="0">
       ${crypto?`<span class="muted">×</span><input class="rate num" type="number" step="any" value="${v[1]}" data-action="ev" data-id="${h.id}" data-f="1">`:""}
-      <span class="bv num" data-ebv="${h.id}">${vnd(v[0]*v[1])}</span></div>`;}).join("");
+      <span class="bv num" data-ebv="${h.id}">${money(v[0]*v[1])}</span></div>`;}).join("");
   modal(`<h3>Edit ${periodLabel(s.period)} <span class="muted" style="font-weight:500;font-size:13px">v${s.version}</span></h3>
     <p class="muted" style="font-size:13px;margin:0 0 14px">Corrections mutate this snapshot in place and bump its version.</p>
     <div style="max-height:50vh;overflow:auto">${rows}</div>
@@ -1091,7 +1105,7 @@ document.addEventListener("input",e=>{
   const a=e.target.dataset.action;if(!a)return;const d=DB.draft;
   if(a==="hv"){const id=e.target.dataset.id,f=+e.target.dataset.f;
     d.values[id][f]=e.target.value===""?(f===0?null:d.values[id][1]):+e.target.value;
-    const bv=$(`[data-bv="${id}"]`);if(bv)bv.textContent=d.values[id][0]==null?"—":vnd(d.values[id][0]*d.values[id][1]);}
+    const bv=$(`[data-bv="${id}"]`);if(bv)bv.textContent=d.values[id][0]==null?"—":money(d.values[id][0]*d.values[id][1]);}
   if(a==="flow-amt"){d.flows[+e.target.dataset.i].amount=+e.target.value||0;}
   if(a==="flow-label"){d.flows[+e.target.dataset.i].label=e.target.value;}
   if(a==="draft-note"){d.notes=e.target.value;}
@@ -1099,12 +1113,13 @@ document.addEventListener("input",e=>{
     const c=completedSorted();const nw=c.length?metrics(c[c.length-1]).netWorth:0;
     $("#wf-root").innerHTML=wfBody(nw);}
   if(a==="ev"){const s=state.editSnap,id=e.target.dataset.id,f=+e.target.dataset.f;
-    s.values[id][f]=+e.target.value||0;const bv=$(`[data-ebv="${id}"]`);if(bv)bv.textContent=vnd(s.values[id][0]*s.values[id][1]);}
+    s.values[id][f]=+e.target.value||0;const bv=$(`[data-ebv="${id}"]`);if(bv)bv.textContent=money(s.values[id][0]*s.values[id][1]);}
   if(a==="set-color-input"){const ht=byId(DB.holdingTypes,e.target.dataset.id);ht.color=e.target.value;render();}
+  if(a==="base-cur"){setBaseCurrency(e.target.value);render();toast("Base currency → "+e.target.value);}
   if(a==="cur-rate"){const cur=e.target.dataset.cur,rate=+e.target.value||0;
     DB.holdings.filter(h=>h.status==="ACTIVE"&&h.cur===cur&&d.values[h.id]).forEach(h=>{d.values[h.id][1]=rate;
       const rl=$(`[data-rate="${h.id}"]`);if(rl)rl.textContent="× "+full(rate);
-      const bv=$(`[data-bv="${h.id}"]`);if(bv)bv.textContent=d.values[h.id][0]==null?"—":vnd(d.values[h.id][0]*rate);});}
+      const bv=$(`[data-bv="${h.id}"]`);if(bv)bv.textContent=d.values[h.id][0]==null?"—":money(d.values[h.id][0]*rate);});}
 });
 
 document.addEventListener("click",e=>{
@@ -1149,12 +1164,12 @@ document.addEventListener("click",e=>{
 function historyModal(id){const h=byId(DB.holdings,id);const c=completedSorted();
   const vals=c.map(s=>s.values[id]?s.values[id][0]*s.values[id][1]:0);
   const rows=c.slice().reverse().map(s=>{const v=s.values[id];return `<div class="kv"><span>${periodShort(s.period)}</span>
-    <span class="v">${v?vnd(v[0]*v[1]):"—"}${nativeStr(h,v?v[0]:0)?`<span class="muted" style="font-weight:500;font-size:12px"> · ${nativeStr(h,v[0])}</span>`:""}</span></div>`;}).join("");
+    <span class="v">${v?money(v[0]*v[1]):"—"}${nativeStr(h,v?v[0]:0)?`<span class="muted" style="font-weight:500;font-size:12px"> · ${nativeStr(h,v[0])}</span>`:""}</span></div>`;}).join("");
   modal(`<h3>${esc(h.name)}<span class="muted" style="font-weight:500;font-size:13px"> · ${type(h.type).label}</span></h3>
     <div style="margin:6px 0 14px">${sparkline(vals)}</div>${rows}
     <div class="actions"><button class="btn pri" data-action="modal-close">Close</button></div>`);}
 function saveHolding(){const name=$("#m-name").value.trim();if(!name)return toast("Enter a name");
-  const cur=$("#m-cur").value.trim()||"VND";const val=+$("#m-val").value||0;const rate=cur==="VND"?1:(+$("#m-rate").value||1);
+  const cur=$("#m-cur").value.trim()||DB.household.base;const val=+$("#m-val").value||0;const rate=cur===DB.household.base?1:(+$("#m-rate").value||1);
   const hid="h_"+Date.now();DB.holdings.push({id:hid,name,type:$("#m-type").value,inst:"",cur,status:"ACTIVE"});
   if(DB.draft)DB.draft.values[hid]=[val,rate];
   closeModal();if($("#overlay").style.display==="block")openWizard();else render();toast(name+" added");}
