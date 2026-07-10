@@ -1,4 +1,5 @@
 import { futureValue } from "@atlas/calc-engine";
+import { HoldingTypesDemo } from "./_components/HoldingTypesDemo";
 
 export default function Home() {
   // Smoke test: exercise the workspace calc-engine from a server component, so a
@@ -43,13 +44,24 @@ export default function Home() {
           A personal financial operating system. The foundation is being built —
           a monthly ritual for seeing where you stand, not a transaction tracker.
         </p>
+
+        <hr style={{ border: 0, borderTop: "1px solid var(--border)", margin: "1.75rem 0" }} />
+
         <p
           style={{
-            margin: "1.75rem 0 0",
-            fontSize: "0.8rem",
+            margin: "0 0 0.6rem",
+            fontSize: "0.72rem",
+            letterSpacing: "0.1em",
+            textTransform: "uppercase",
             color: "var(--muted)",
+            fontWeight: 600,
           }}
         >
+          Holding types &mdash; live from Postgres via tRPC
+        </p>
+        <HoldingTypesDemo />
+
+        <p style={{ margin: "1.5rem 0 0", fontSize: "0.8rem", color: "var(--muted)" }}>
           calc-engine:{" "}
           <span style={{ color: engineOnline ? "var(--accent)" : "crimson", fontWeight: 600 }}>
             {engineOnline ? "online" : "error"}
