@@ -1,0 +1,358 @@
+// Project Atlas — Prisma schema.
+//
+// The source of truth for the data model is docs/03-database-design.md; this
+// file transcribes that DDL (docs/03 §7: "write the Prisma schema to generate
+// equivalent DDL, don't hand-diverge").
+//
+// A few Postgres features docs/03 specifies CANNOT be expressed in the Prisma
+// schema language and are applied by augmenting the generated migration SQL —
+// each is flagged inline with `MIGRATION SQL:`:
+//   - partial unique indexes (holding_type global-vs-custom scoping)
+//   - partial indexes (active holdings)
+//   - CHECK constraints (check_in_day range, period_month = first-of-month)
+//   - the citext extension (case-insensitive email)
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ============================================================
+// Auth.js (NextAuth) adapter models
+// ------------------------------------------------------------
+// docs/03 §1 defers these to the Auth.js Prisma adapter, but Prisma keeps every
+// table in one schema, so the adapter's standard models live here. String/cuid
+// ids match the adapter's defaults (and docs/03's `member.user_id TEXT`).
+// `passwordHash` is the one addition, for the v1 Credentials provider.
+// ============================================================
+
+model User {
+  id            String    @id @default(cuid())
+  name          String?
+  email         String?   @unique
+  emailVerified DateTime? @map("email_verified")
+  image         String?
+  passwordHash  String?   @map("password_hash")
+
+  accounts Account[]
+  sessions Session[]
+  member   Member?
+
+  @@map("user")
+}
+
+model Account {
+  id                String  @id @default(cuid())
+  userId            String  @map("user_id")
+  type              String
+  provider          String
+  providerAccountId String  @map("provider_account_id")
+  refresh_token     String?
+  access_token      String?
+  expires_at        Int?
+  token_type        String?
+  scope             String?
+  id_token          String?
+  session_state     String?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerAccountId])
+  @@map("account")
+}
+
+model Session {
+  id           String   @id @default(cuid())
+  sessionToken String   @unique @map("session_token")
+  userId       String   @map("user_id")
+  expires      DateTime
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("session")
+}
+
+model VerificationToken {
+  identifier String
+  token      String   @unique
+  expires    DateTime
+
+  @@unique([identifier, token])
+  @@map("verification_token")
+}
+
+// ============================================================
+// Enums (docs/03 §2)
+// ============================================================
+
+enum MemberRole {
+  OWNER
+  MEMBER
+
+  @@map("member_role")
+}
+
+enum HoldingClassification {
+  ASSET
+  LIABILITY
+
+  @@map("holding_classification")
+}
+
+enum HoldingStatus {
+  ACTIVE
+  ARCHIVED
+
+  @@map("holding_status")
+}
+
+enum SnapshotStatus {
+  DRAFT
+  COMPLETED
+
+  @@map("snapshot_status")
+}
+
+enum CashFlowCategory {
+  ACTIVE_INCOME
+  PASSIVE_INCOME
+  EXPENSE
+  INVESTMENT_CONTRIBUTION
+
+  @@map("cash_flow_category")
+}
+
+enum GoalType {
+  FIRE
+  NET_WORTH
+  HOUSE_FUND
+  EDUCATION_FUND
+  CUSTOM
+
+  @@map("goal_type")
+}
+
+enum GoalTrackingMode {
+  NET_WORTH
+  HOLDING_SUBSET
+
+  @@map("goal_tracking_mode")
+}
+
+enum GoalStatus {
+  ACTIVE
+  ACHIEVED
+  ARCHIVED
+
+  @@map("goal_status")
+}
+
+// ============================================================
+// Household & Members
+// ============================================================
+
+model Household {
+  id           String   @id @default(uuid()) @db.Uuid
+  name         String
+  baseCurrency String   @map("base_currency") @db.Char(3)
+  // MIGRATION SQL: CHECK (check_in_day BETWEEN 1 AND 28)
+  checkInDay   Int      @default(1) @map("check_in_day") @db.SmallInt
+  createdAt    DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  members        Member[]
+  holdingTypes   HoldingType[]
+  holdings       Holding[]
+  snapshots      MonthlySnapshot[]
+  goals          Goal[]
+  reminderStates CheckinReminderState[]
+
+  @@map("household")
+}
+
+model Member {
+  id          String     @id @default(uuid()) @db.Uuid
+  householdId String     @map("household_id") @db.Uuid
+  // = Auth.js User.id (1:1). String, not Uuid, to match the adapter's cuid ids.
+  userId      String     @unique @map("user_id")
+  name        String
+  email       String     @unique @db.Citext
+  role        MemberRole @default(MEMBER)
+  createdAt   DateTime   @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  household Household @relation(fields: [householdId], references: [id], onDelete: Cascade)
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([householdId], map: "idx_member_household")
+  @@map("member")
+}
+
+// ============================================================
+// Holdings
+// ============================================================
+
+model HoldingType {
+  id             String                @id @default(uuid()) @db.Uuid
+  // NULL = global seed type; set = per-household custom type (docs/03 §6).
+  householdId    String?               @map("household_id") @db.Uuid
+  slug           String
+  label          String
+  classification HoldingClassification
+  isInvestable   Boolean               @default(false) @map("is_investable")
+  isCash         Boolean               @default(false) @map("is_cash")
+
+  household Household? @relation(fields: [householdId], references: [id], onDelete: Cascade)
+  holdings  Holding[]
+
+  // Per-household slug uniqueness (custom types). GLOBAL slug uniqueness
+  // (WHERE household_id IS NULL) is a PARTIAL index Prisma can't express.
+  // MIGRATION SQL: CREATE UNIQUE INDEX uq_holding_type_global ON holding_type(slug) WHERE household_id IS NULL;
+  @@unique([householdId, slug], map: "uq_holding_type_custom")
+  @@index([householdId], map: "idx_holding_type_household")
+  @@map("holding_type")
+}
+
+model Holding {
+  id            String        @id @default(uuid()) @db.Uuid
+  householdId   String        @map("household_id") @db.Uuid
+  holdingTypeId String        @map("holding_type_id") @db.Uuid
+  name          String
+  institution   String?
+  // Denomination: ISO-4217 fiat code OR crypto ticker (BTC, USDT, ...).
+  currency      String        @db.VarChar(12)
+  status        HoldingStatus @default(ACTIVE)
+  createdAt     DateTime      @default(now()) @map("created_at") @db.Timestamptz(6)
+  archivedAt    DateTime?     @map("archived_at") @db.Timestamptz(6)
+
+  household        Household         @relation(fields: [householdId], references: [id], onDelete: Cascade)
+  // No cascade: a holding_type in use can't be deleted (Restrict, docs/03).
+  holdingType      HoldingType       @relation(fields: [holdingTypeId], references: [id])
+  snapshotHoldings SnapshotHolding[]
+  goalHoldings     GoalHolding[]
+
+  // docs/03's idx_holding_household_active is PARTIAL (WHERE status = 'ACTIVE').
+  // MIGRATION SQL: replace with CREATE INDEX ... ON holding(household_id) WHERE status = 'ACTIVE';
+  @@index([householdId], map: "idx_holding_household")
+  @@map("holding")
+}
+
+// ============================================================
+// Monthly Snapshots
+// ============================================================
+
+model MonthlySnapshot {
+  id          String         @id @default(uuid()) @db.Uuid
+  householdId String         @map("household_id") @db.Uuid
+  // MIGRATION SQL: CHECK (date_trunc('month', period_month) = period_month)
+  periodMonth DateTime       @map("period_month") @db.Date
+  status      SnapshotStatus @default(DRAFT)
+  notes       String?
+  version     Int            @default(1)
+
+  // Cached calculation-engine outputs (recomputed on every write; docs/07 §1).
+  netWorthBase         Decimal? @map("net_worth_base") @db.Decimal(24, 8)
+  investableAssetsBase Decimal? @map("investable_assets_base") @db.Decimal(24, 8)
+  cashPositionBase     Decimal? @map("cash_position_base") @db.Decimal(24, 8)
+  passiveIncomeBase    Decimal? @map("passive_income_base") @db.Decimal(24, 8)
+  savingsRate          Decimal? @map("savings_rate") @db.Decimal(9, 4)
+
+  completedAt DateTime? @map("completed_at") @db.Timestamptz(6)
+  updatedAt   DateTime  @updatedAt @map("updated_at") @db.Timestamptz(6)
+  createdAt   DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  household Household          @relation(fields: [householdId], references: [id], onDelete: Cascade)
+  holdings  SnapshotHolding[]
+  cashFlows SnapshotCashFlow[]
+
+  @@unique([householdId, periodMonth])
+  @@index([householdId, periodMonth(sort: Desc)], map: "idx_snapshot_household_period")
+  @@map("monthly_snapshot")
+}
+
+model SnapshotHolding {
+  id           String  @id @default(uuid()) @db.Uuid
+  snapshotId   String  @map("snapshot_id") @db.Uuid
+  holdingId    String  @map("holding_id") @db.Uuid
+  // Native-unit amount: fiat balance OR coin quantity (docs/03 §1).
+  value        Decimal @db.Decimal(24, 8)
+  // Price of ONE native unit in base currency (docs/07 §1.6).
+  fxRateToBase Decimal @default(1) @map("fx_rate_to_base") @db.Decimal(24, 8)
+  // value * fxRateToBase.
+  valueBase    Decimal @map("value_base") @db.Decimal(24, 8)
+
+  snapshot MonthlySnapshot @relation(fields: [snapshotId], references: [id], onDelete: Cascade)
+  // CASCADE (not Restrict): invariant 7 is enforced in the API layer, not the
+  // FK, so the "delete household" cascade can't deadlock (docs/03 §2 note).
+  holding  Holding         @relation(fields: [holdingId], references: [id], onDelete: Cascade)
+
+  @@unique([snapshotId, holdingId])
+  @@index([snapshotId], map: "idx_snapshot_holding_snapshot")
+  @@index([holdingId], map: "idx_snapshot_holding_holding")
+  @@map("snapshot_holding")
+}
+
+model SnapshotCashFlow {
+  id         String           @id @default(uuid()) @db.Uuid
+  snapshotId String           @map("snapshot_id") @db.Uuid
+  category   CashFlowCategory
+  label      String
+  amount     Decimal          @db.Decimal(24, 8)
+
+  snapshot MonthlySnapshot @relation(fields: [snapshotId], references: [id], onDelete: Cascade)
+
+  @@index([snapshotId], map: "idx_cash_flow_snapshot")
+  @@map("snapshot_cash_flow")
+}
+
+// ============================================================
+// Goals
+// ============================================================
+
+model Goal {
+  id           String           @id @default(uuid()) @db.Uuid
+  householdId  String           @map("household_id") @db.Uuid
+  type         GoalType
+  name         String
+  targetAmount Decimal          @map("target_amount") @db.Decimal(24, 8)
+  targetDate   DateTime?        @map("target_date") @db.Date
+  trackingMode GoalTrackingMode @default(NET_WORTH) @map("tracking_mode")
+  status       GoalStatus       @default(ACTIVE)
+  createdAt    DateTime         @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  household    Household     @relation(fields: [householdId], references: [id], onDelete: Cascade)
+  goalHoldings GoalHolding[]
+
+  @@index([householdId], map: "idx_goal_household")
+  @@map("goal")
+}
+
+model GoalHolding {
+  goalId    String @map("goal_id") @db.Uuid
+  holdingId String @map("holding_id") @db.Uuid
+
+  goal    Goal    @relation(fields: [goalId], references: [id], onDelete: Cascade)
+  holding Holding @relation(fields: [holdingId], references: [id], onDelete: Cascade)
+
+  @@id([goalId, holdingId])
+  @@map("goal_holding")
+}
+
+// ============================================================
+// Reminder state (docs/03 §2, docs/08 §4)
+// ============================================================
+
+model CheckinReminderState {
+  householdId    String    @map("household_id") @db.Uuid
+  // MIGRATION SQL: CHECK (date_trunc('month', period_month) = period_month)
+  periodMonth    DateTime  @map("period_month") @db.Date
+  reminderSentAt DateTime? @map("reminder_sent_at") @db.Timestamptz(6)
+  followUpSentAt DateTime? @map("follow_up_sent_at") @db.Timestamptz(6)
+
+  household Household @relation(fields: [householdId], references: [id], onDelete: Cascade)
+
+  @@id([householdId, periodMonth])
+  @@map("checkin_reminder_state")
+}

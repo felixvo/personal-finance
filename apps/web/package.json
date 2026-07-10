@@ -7,10 +7,19 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "db:validate": "prisma validate",
+    "db:generate": "prisma generate",
+    "db:migrate": "prisma migrate dev",
+    "db:seed": "prisma db seed",
+    "db:studio": "prisma studio"
+  },
+  "prisma": {
+    "seed": "tsx prisma/seed.ts"
   },
   "dependencies": {
     "@atlas/calc-engine": "*",
+    "@prisma/client": "^6.19.0",
     "next": "^16.2.10",
     "react": "^19.2.0",
     "react-dom": "^19.2.0"
@@ -19,6 +28,8 @@
     "@types/node": "^22.10.0",
     "@types/react": "^19.2.0",
     "@types/react-dom": "^19.2.0",
+    "prisma": "^6.19.0",
+    "tsx": "^4.19.0",
     "typescript": "^5.7.0"
   }
 }
