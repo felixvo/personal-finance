@@ -85,6 +85,7 @@
   .grid{display:grid;gap:16px}
   .g2{grid-template-columns:1fr 1fr}
   .g3{grid-template-columns:1fr 1fr 1fr}
+  .g4{grid-template-columns:repeat(4,1fr)}
   .card{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:18px 20px}
   .card h2{font-size:14px;font-weight:600;margin:0 0 2px;color:var(--ink)}
   .card .hint{color:var(--muted);font-size:12.5px}
@@ -222,7 +223,7 @@
     .nav button span.tx{display:none}.nav button{padding:9px}
     .cta{width:auto;white-space:nowrap}
     .main{padding:20px 16px 90px}
-    .g2,.g3{grid-template-columns:1fr}.wf{grid-template-columns:1fr}
+    .g2,.g3{grid-template-columns:1fr}.g4{grid-template-columns:1fr 1fr}.wf{grid-template-columns:1fr}
     .page-head{flex-direction:column;align-items:flex-start}
   }
   @media (prefers-reduced-motion:reduce){*{transition:none!important}}
@@ -564,53 +565,64 @@ function page(){
 }
 
 /* ---------- HOME ---------- */
+function netWorthTrend(){
+  const c=completedSorted();
+  if(c.length<2)return `<div class="muted" style="font-size:12.5px;padding:8px 0">Two check-ins are needed to chart a trend.</div>`;
+  return lineChart(c.map(s=>({p:s.period,v:metrics(s).netWorth})),{});
+}
 function viewHome(){
   const cs=checkinState();
-  const c=completedSorted();const latest=c[c.length-1];
-  if(cs!=="completed"){
-    // pending / resume
-    const m=latest?metrics(latest):null;
-    return `<div class="page-head"><div>
-        <div class="eyebrow">${periodLabel(CUR_PERIOD)} · Check-in ${cs==="draft"?"in progress":"pending"}</div>
+  const c=completedSorted();
+  if(!c.length)return `<div class="page-head"><div><h1>Welcome to Atlas</h1>
+      <div class="sub">Let's capture your first monthly snapshot.</div></div></div>
+      <div class="card" style="text-align:center;padding:30px">
+        <p class="muted" style="margin:0 0 16px">You haven't done a check-in yet.</p>
+        <button class="btn pri" style="font-size:15px;padding:12px 22px" data-action="start">Start your first Check-in →</button></div>`;
+  const latest=c[c.length-1],prev=prevOf(latest),m=metrics(latest),pm=prev?metrics(prev):null;
+  const isDash=cs==="completed",monthWord=periodLabel(CUR_PERIOD).split(" ")[0];
+
+  const head = isDash
+    ? `<div class="page-head"><div><div class="eyebrow">${periodLabel(latest.period)} · Check-in complete</div>
+        <h1>Dashboard</h1></div>
+        <button class="btn sm" data-action="open-snap" data-id="${latest.id}">Edit snapshot</button></div>`
+    : `<div class="page-head"><div><div class="eyebrow">${periodLabel(CUR_PERIOD)}</div>
         <h1>Welcome back, ${esc(DB.household.name)}</h1></div></div>
-      <div class="grid" style="max-width:560px">
-        ${latest?`<div class="card"><div class="eyebrow">Last snapshot — ${periodShort(latest.period)}</div>
-          <div class="hero"><div class="val num">${vnd(m.netWorth)}</div><div class="label muted">Net worth · completed ${daysAgo(latest.period)}</div></div></div>`:""}
-        <div class="card" style="text-align:center;padding:26px">
-          <p class="muted" style="margin:0 0 16px">${cs==="draft"?"You have a check-in in progress for this month.":"Time for your monthly financial check-in."}</p>
-          <button class="btn pri" style="font-size:15px;padding:12px 22px" data-action="${cs==="draft"?"resume":"start"}">
-            ${cs==="draft"?"Resume Check-in":"Start Financial Check-in"} →</button>
-          <div class="muted" style="font-size:12.5px;margin-top:10px">Takes about 5 minutes</div>
-          ${cs==="draft"?`<button class="link" style="margin-top:6px" data-action="discard">Discard draft</button>`:""}
-        </div></div>`;
-  }
-  const snap=latest, m=metrics(snap), prev=prevOf(snap), pm=prev?metrics(prev):null;
+      <div class="banner" style="align-items:center;justify-content:space-between;gap:14px;margin-bottom:22px">
+        <div><div style="font-weight:600;font-size:15px">${cs==="draft"?`Your ${monthWord} check-in is in progress`:`It's time for your ${monthWord} check-in`}</div>
+          <div class="muted" style="font-size:13px;margin-top:2px">${cs==="draft"?"Pick up where you left off — about 5 minutes.":"Update your balances to log this month. Takes about 5 minutes."}</div></div>
+        <div class="row" style="flex:none">${cs==="draft"?`<button class="link" data-action="discard">Discard</button>`:""}
+          <button class="btn pri" data-action="${cs==="draft"?"resume":"start"}">${cs==="draft"?"Resume Check-in":"Start Check-in"} →</button></div></div>`;
+
+  const asOf = isDash ? "" : `<div class="eyebrow" style="margin-bottom:12px">Your standing as of ${periodShort(latest.period)} — updates when you check in</div>`;
+
+  const heroCard = `<div class="card" style="margin-bottom:16px">
+      <div class="row" style="justify-content:space-between;align-items:flex-start;gap:16px">
+        <div class="hero"><div class="label muted">Net worth${isDash?"":` · as of ${periodShort(latest.period)}`}</div>
+          <div class="val num">${vnd(m.netWorth)}</div>
+          <div class="row" style="margin-top:6px">${deltaEl(m.netWorth,pm&&pm.netWorth)}</div></div>
+        <div class="muted" style="font-size:12px;text-align:right;white-space:nowrap">${c.length} months tracked</div></div>
+      <div style="margin-top:10px">${netWorthTrend()}</div></div>`;
+
+  const tiles = `<div class="grid g4" style="margin-bottom:16px">
+      ${tile("Passive income",vnd(m.passive)+" / mo",deltaEl(m.passive,pm&&pm.passive))}
+      ${tile("Investable assets",vnd(m.investable),deltaEl(m.investable,pm&&pm.investable))}
+      ${tile("Cash position",vnd(m.cash),deltaEl(m.cash,pm&&pm.cash))}
+      ${tile("Savings rate",m.savings==null?"—":(m.savings*100).toFixed(0)+"%",pm?savingsDelta(m.savings,pm.savings):"")}</div>`;
+
   const goalsMini=DB.goals.filter(g=>g.status==="ACTIVE").slice(0,3).map(g=>{
     const p=goalProgress(g);return `<div style="margin-bottom:12px">
       <div class="row" style="justify-content:space-between"><span style="font-weight:600;font-size:13.5px">${esc(g.name)}</span>
         <span class="num muted" style="font-size:13px">${(p.pct*100).toFixed(0)}%</span></div>
       <div class="meter"><div class="fill" style="width:${(p.pct*100).toFixed(1)}%"></div></div></div>`;}).join("");
-  return `<div class="page-head">
-      <div><div class="eyebrow">${periodLabel(snap.period)} · Check-in complete</div>
-      <h1>Dashboard</h1></div>
-      <button class="btn sm" data-action="open-snap" data-id="${snap.id}">Edit snapshot</button></div>
-    <div class="grid g2" style="margin-bottom:16px">
-      <div class="card hero"><div class="label muted">Net worth</div>
-        <div class="val num">${vnd(m.netWorth)}</div><div class="row" style="margin-top:8px">${deltaEl(m.netWorth,pm&&pm.netWorth)}</div></div>
-      <div class="grid" style="grid-template-columns:1fr 1fr;gap:16px">
-        ${tile("Passive income",vnd(m.passive)+" / mo",deltaEl(m.passive,pm&&pm.passive))}
-        ${tile("Investable assets",vnd(m.investable),deltaEl(m.investable,pm&&pm.investable))}
-        ${tile("Cash position",vnd(m.cash),deltaEl(m.cash,pm&&pm.cash))}
-        ${tile("Savings rate",m.savings==null?"—":(m.savings*100).toFixed(0)+"%",
-          pm?deltaEl(0,0,{}).replace(/.*/, savingsDelta(m.savings,pm.savings)) : "")}
-      </div></div>
-    <div class="grid g2">
+
+  const bottom = `<div class="grid g2">
       <div class="card"><h2>Asset allocation</h2><div class="hint" style="margin-bottom:14px">Where the money sits, by type</div>
-        ${allocBar(assetAllocation(snap))}</div>
+        ${allocBar(assetAllocation(latest))}</div>
       <div class="card"><h2>Goal progress</h2><div class="hint" style="margin-bottom:14px">Toward your targets</div>
         ${goalsMini||'<p class="muted">No goals yet.</p>'}
-        <button class="link" data-nav="goals" style="padding-left:0">View all goals →</button></div>
-    </div>`;
+        <button class="link" data-nav="goals" style="padding-left:0">View all goals →</button></div></div>`;
+
+  return head + asOf + heroCard + tiles + bottom;
 }
 function savingsDelta(cur,prev){if(prev==null||cur==null)return "";const d=(cur-prev)*100;
   if(Math.abs(d)<.5)return `<span class="delta neutral">— no change</span>`;
