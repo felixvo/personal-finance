@@ -1,4 +1,4 @@
-import { router, publicProcedure } from "../trpc";
+import { router, publicProcedure, protectedProcedure } from "../trpc";
 
 /**
  * Root tRPC router. Phase 0 exposes just enough to prove the stack end to end
@@ -25,6 +25,17 @@ export const appRouter = router({
         },
       }),
     ),
+  }),
+
+  me: router({
+    /** The signed-in user and their household membership (null until onboarded). */
+    get: protectedProcedure.query(async ({ ctx }) => {
+      const member = await ctx.prisma.member.findUnique({
+        where: { userId: ctx.session.user.id },
+        include: { household: true },
+      });
+      return { userId: ctx.session.user.id, member };
+    }),
   }),
 });
 
