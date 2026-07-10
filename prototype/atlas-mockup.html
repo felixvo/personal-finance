@@ -127,6 +127,15 @@
   .legend .item{display:flex;align-items:center;gap:7px;font-size:12.5px;color:var(--ink2)}
   .legend .sw{width:11px;height:11px;border-radius:3px;flex:none}
   .legend b{color:var(--ink);font-weight:600;font-variant-numeric:tabular-nums}
+  .pie-wrap{display:flex;align-items:center;gap:20px;flex-wrap:wrap;margin-top:8px}
+  .pie{width:160px;height:160px;flex:none}
+  .pie-legend{margin-top:0;flex-direction:column;gap:9px}
+  .swatch-btn{width:20px;height:20px;border-radius:6px;border:1px solid var(--border);cursor:pointer;flex:none;padding:0}
+  .swatch-btn:hover{outline:2px solid var(--accent);outline-offset:1px}
+  .preset-grid{display:grid;grid-template-columns:repeat(6,1fr);gap:8px}
+  .pre-sw{aspect-ratio:1;border-radius:9px;border:2px solid var(--border);cursor:pointer;padding:0}
+  .pre-sw:hover{transform:scale(1.09);border-color:var(--accent)}
+  .pre-sw.on{border-color:var(--ink);box-shadow:0 0 0 2px var(--surface),0 0 0 4px var(--ink)}
 
   /* ============ Meter ============ */
   .meter{height:9px;border-radius:99px;background:var(--surface-2);overflow:hidden;margin:8px 0}
@@ -355,8 +364,14 @@ function periodShort(p){const[y,m]=p.split("-");return new Date(+y,+m-1,1)
   .toLocaleDateString("en-US",{month:"short",year:"numeric"});}
 function addMonths(p,n){let[y,m]=p.split("-").map(Number);m-=1+0;const d=new Date(y,m+n,1);
   return d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0");}
-const colorForType = slug=>{const map={cash:1,brokerage:2,crypto:3,real_estate:4,retirement:5,loan:6,credit_card:7};
-  return "var(--cat-"+(map[slug]||8)+")";};
+const CAT_SLOT={cash:1,brokerage:2,crypto:3,real_estate:4,retirement:5,loan:6,credit_card:7};
+function colorForType(key){                          // key = holding-type slug or id
+  const t=DB.holdingTypes.find(x=>x.slug===key||x.id===key);
+  if(t&&t.color) return t.color;                     // user-chosen color wins
+  return "var(--cat-"+(CAT_SLOT[t?t.slug:key]||8)+")";
+}
+const COLOR_PRESETS=["#7fb0e6","#8f93e8","#5fc4ac","#84c58c","#a7d086","#e6c46a",
+  "#efb088","#e79aa1","#e6a6cf","#b7a6ee","#9ab0d8","#8fd0c8"];
 
 /* ---------- icons (inline SVG, currentColor) ---------- */
 const svgi = p=>`<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${p}</svg>`;
@@ -420,11 +435,22 @@ function mortgage(P,rA,years){const r=rA/12,n=years*12;
   return {payment:M,total:M*n,interest:M*n-P,series,n};}
 
 /* ---------- chart builders (inline SVG, themed via CSS vars) ---------- */
-function allocBar(items){ // items: [{label,value,color}]
+function allocPie(items){ // items: [{label,value,color}] — pie chart + legend
   const tot=items.reduce((s,i)=>s+i.value,0)||1;
-  const segs=items.map(i=>`<div class="seg" style="width:${(i.value/tot*100).toFixed(3)}%;background:${i.color}" title="${esc(i.label)}"></div>`).join("");
+  const cx=90,cy=90,r=84;
+  let a0=-Math.PI/2;                                   // start at 12 o'clock
+  const slices=items.map(it=>{
+    const frac=it.value/tot;
+    if(frac<=0) return "";
+    if(frac>=0.9999) return `<circle cx="${cx}" cy="${cy}" r="${r}" fill="${it.color}"/>`;
+    const a1=a0+frac*2*Math.PI, large=frac>0.5?1:0;
+    const x0=(cx+r*Math.cos(a0)).toFixed(2), y0=(cy+r*Math.sin(a0)).toFixed(2);
+    const x1=(cx+r*Math.cos(a1)).toFixed(2), y1=(cy+r*Math.sin(a1)).toFixed(2);
+    a0=a1;
+    return `<path d="M ${cx} ${cy} L ${x0} ${y0} A ${r} ${r} 0 ${large} 1 ${x1} ${y1} Z" fill="${it.color}" stroke="var(--surface)" stroke-width="2" stroke-linejoin="round"/>`;
+  }).join("");
   const leg=items.map(i=>`<div class="item"><span class="sw" style="background:${i.color}"></span>${esc(i.label)} <b>${(i.value/tot*100).toFixed(0)}%</b></div>`).join("");
-  return `<div class="alloc">${segs}</div><div class="legend">${leg}</div>`;
+  return `<div class="pie-wrap"><svg class="pie" viewBox="0 0 180 180" role="img" aria-label="allocation pie chart">${slices}</svg><div class="legend pie-legend">${leg}</div></div>`;
 }
 function lineChart(series,opts={}){ // series: [{p,v}] ; opts.projection:[{p,v}], opts.target
   const W=640,H=200,pl=8,pr=14,pt=14,pb=24;
@@ -634,7 +660,7 @@ function viewHome(){
 
   const bottom = `<div class="grid g2">
       <div class="card"><h2>Asset allocation${info("Share of your assets by type. Bar length encodes proportion; the legend shows each percentage.")}</h2><div class="hint" style="margin-bottom:14px">Where the money sits, by type</div>
-        ${allocBar(assetAllocation(latest))}</div>
+        ${allocPie(assetAllocation(latest))}</div>
       <div class="card"><h2>Goal progress${info("Each active goal's current value ÷ its target. Open Goals for pace and projected completion.")}</h2><div class="hint" style="margin-bottom:14px">Toward your targets</div>
         ${goalsMini||'<p class="muted">No goals yet.</p>'}
         <button class="link" data-nav="goals" style="padding-left:0">View all goals →</button></div></div>`;
@@ -673,8 +699,8 @@ function viewAssets(){
       <div class="sub">Every place the family's money is stored — ${periodShort(snap.period)}</div></div>
       <button class="btn pri" data-action="add-holding">+ Add holding</button></div>
     <div class="grid g2" style="margin-bottom:8px">
-      <div class="card"><h2>Asset allocation${info("Share of your assets by type (cash, brokerage, real estate…). Length encodes proportion; the legend shows each %.")}</h2><div class="hint" style="margin-bottom:14px">By holding type</div>${allocBar(assetAllocation(snap))}</div>
-      <div class="card"><h2>Currency allocation${info("Share of assets by denomination. Foreign currency and crypto are each counted in their own unit, then converted to VND.")}</h2><div class="hint" style="margin-bottom:14px">By denomination (crypto counts as its own unit)</div>${allocBar(currencyAllocation(snap))}</div>
+      <div class="card"><h2>Asset allocation${info("Share of your assets by type (cash, brokerage, real estate…). Length encodes proportion; the legend shows each %.")}</h2><div class="hint" style="margin-bottom:14px">By holding type</div>${allocPie(assetAllocation(snap))}</div>
+      <div class="card"><h2>Currency allocation${info("Share of assets by denomination. Foreign currency and crypto are each counted in their own unit, then converted to VND.")}</h2><div class="hint" style="margin-bottom:14px">By denomination (crypto counts as its own unit)</div>${allocPie(currencyAllocation(snap))}</div>
     </div>
     <div class="card" style="margin-bottom:16px">
       <div class="row" style="justify-content:space-between;align-items:center;margin-bottom:12px;gap:12px">
@@ -831,10 +857,12 @@ function viewSettings(){
         <div class="row"><button class="btn" data-action="theme">Toggle light / dark</button>
         <button class="btn danger" data-action="reset">Reset demo data</button></div></div>
       <div class="card" style="grid-column:1/-1"><h2>Holding types${info("The categories a holding can take. Global seed types are shared; custom types you add are private to your household.")}</h2>
-        <div class="hint" style="margin-bottom:10px">Global seed types are shared; custom types are private to this household.</div>
-        ${DB.holdingTypes.map(t=>`<div class="hrow"><span class="sw" style="width:9px;height:9px;border-radius:2px;background:${colorForType(t.slug)}"></span>
-          <div class="nm">${esc(t.label)} <span class="muted" style="font-size:12px">${t.cls==="ASSET"?"asset":"liability"}${t.household?" · custom":""}</span></div>
-          <div class="amt muted" style="font-size:12px">${t.inv?"investable ":""}${t.cash?"cash":""}</div></div>`).join("")}
+        <div class="hint" style="margin-bottom:10px">Global seed types are shared; custom types are private to this household. Click a swatch to recolor a type — it updates every chart.</div>
+        ${DB.holdingTypes.map(t=>`<div class="hrow">
+          <button class="swatch-btn" data-action="pick-color" data-id="${t.id}" title="Change color" style="background:${colorForType(t.slug)}"></button>
+          <div class="nm">${esc(t.label)} <span class="muted" style="font-size:12px">${t.cls==="ASSET"?"asset":"liability"}${t.household?" · custom":""}${t.color?" · custom color":""}</span></div>
+          <div class="amt muted" style="font-size:12px">${t.inv?"investable ":""}${t.cash?"cash":""}</div>
+          <button class="link" data-action="pick-color" data-id="${t.id}" style="margin-left:10px">Recolor</button></div>`).join("")}
         <button class="btn sm" style="margin-top:12px" data-action="add-type">+ Add custom type</button></div>
     </div>`;
 }
@@ -883,8 +911,8 @@ function wzStep(){
       <div style="margin-top:16px">${holdingSummaryList()}</div>`;
   }
   if(wz.step===1){ // update holdings
-    return `<h3>Update your holdings${info("Values are pre-filled from last month — edit only what changed. Non-VND holdings take an amount plus a unit price.")}</h3><p class="lead">Change the current value of anything that moved. Crypto is entered as coin quantity × unit price.</p>
-      ${holdingEditor()}`;
+    return `<h3>Update your holdings${info("Values are pre-filled from last month — edit only what changed. Foreign-currency and crypto rates are set once, in Exchange rates above.")}</h3><p class="lead">Change the current value of anything that moved. Set foreign-currency and crypto rates once, above — they apply to every holding in that currency.</p>
+      ${ratesPanel()}${holdingEditor()}`;
   }
   if(wz.step===2){ // add / archive
     return `<h3>Add or archive holdings</h3><p class="lead">Add anything new; archive accounts you've closed (their history is preserved).</p>
@@ -927,11 +955,51 @@ function holdingEditor(){const d=DB.draft;
     ${groups[t.id].map(h=>{const v=d.values[h.id];const crypto=h.cur!=="VND";
       return `<div class="edit-row"><div class="nm" style="flex:none;width:130px">${esc(h.name)}<div class="sub">${h.cur}</div></div>
         <input class="qty num" type="number" step="any" placeholder="amount" value="${v&&v[0]!=null?v[0]:""}" data-action="hv" data-id="${h.id}" data-f="0">
-        ${crypto?`<span class="muted">×</span><input class="rate num" type="number" step="any" placeholder="unit price" value="${v?v[1]:""}" data-action="hv" data-id="${h.id}" data-f="1">`:""}
+        ${crypto?`<span class="muted" style="font-size:12px;white-space:nowrap" data-rate="${h.id}">× ${v?full(v[1]):"—"}</span>`:""}
         <span class="bv num" data-bv="${h.id}">${v&&v[0]!=null?vnd(v[0]*v[1]):"—"}</span></div>`;}).join("")}</div>`:"").join("");
 }
-function completeCheckin(){
-  const d=DB.draft;d.status="COMPLETED";
+/* ---- FX rate remembering: one rate per currency, pre-filled from last month ---- */
+function draftCurrencyRate(cur){const d=DB.draft;const h=DB.holdings.find(h=>h.status==="ACTIVE"&&h.cur===cur&&d.values[h.id]);return h?d.values[h.id][1]:1;}
+function baseRateFor(snap,cur){const h=DB.holdings.find(h=>h.cur===cur&&snap.values[h.id]);return h?snap.values[h.id][1]:null;}
+function draftForeignCurrencies(){const d=DB.draft;
+  return [...new Set(DB.holdings.filter(h=>h.status==="ACTIVE"&&d.values[h.id]&&h.cur!==DB.household.base).map(h=>h.cur))];}
+function ratesPanel(){
+  const d=DB.draft,base=completedSorted().slice(-1)[0],curs=draftForeignCurrencies();
+  if(!curs.length)return "";
+  return `<div class="card" style="margin-bottom:18px;background:var(--surface-2);box-shadow:none">
+    <h2 style="margin-bottom:2px">Exchange rates${info("One rate per currency, applied to every holding in it. Pre-filled from last month — update only if it moved.")}</h2>
+    <div class="hint" style="margin-bottom:12px">Price of 1 unit in ${DB.household.base}, remembered from your last check-in.</div>
+    ${curs.map(cur=>{const rate=draftCurrencyRate(cur),last=base?baseRateFor(base,cur):null;
+      return `<div class="edit-row"><div class="nm" style="flex:none;width:120px">1 ${cur}<div class="sub">→ ${DB.household.base}</div></div>
+        <input class="rate num" type="number" step="any" value="${rate}" data-action="cur-rate" data-cur="${cur}">
+        <span class="bv num" style="width:auto;white-space:nowrap">${last?`last month ${full(last)}`:"new"}</span></div>`;}).join("")}
+  </div>`;
+}
+/* ---- sanity guard: flag implausible changes before saving ---- */
+function checkAnomalies(){
+  const d=DB.draft,base=completedSorted().slice(-1)[0];if(!base)return [];
+  const out=[];
+  for(const h of DB.holdings){const v=d.values[h.id];if(!v||v[0]==null)continue;
+    const ov=base.values[h.id]?base.values[h.id][0]:null;if(ov==null||ov===0)continue;
+    const r=v[0]/ov;if(r>=3||r<=0.34)out.push({label:h.name+" ("+h.cur+")",
+      disp:(nativeStr(h,ov)||full(ov))+" → "+(nativeStr(h,v[0])||full(v[0])),pct:(r-1)*100});}
+  for(const cur of draftForeignCurrencies()){const nr=draftCurrencyRate(cur),or=base?baseRateFor(base,cur):null;
+    if(!or||!nr)continue;const r=nr/or;if(r>=3||r<=0.34)out.push({label:cur+" → "+DB.household.base+" rate",disp:full(or)+" → "+full(nr),pct:(r-1)*100});}
+  return out;
+}
+function anomalyModal(anom){
+  const rows=anom.map(a=>`<div class="rvw"><span class="k">${esc(a.label)}</span>
+    <span class="v"><span class="num">${esc(a.disp)}</span> <span class="delta" style="color:var(--warn-ink)">${a.pct>0?"▲":"▼"} ${Math.abs(a.pct).toFixed(0)}%</span></span></div>`).join("");
+  modal(`<h3>Double-check these big changes</h3>
+    <div class="muted" style="font-size:12.5px;margin:-6px 0 12px">These moved a lot since last month. If they're right, go ahead — Atlas just wants to catch typos before saving.</div>
+    ${rows}
+    <div class="actions"><button class="btn" data-action="modal-close">Let me review</button>
+      <button class="btn pri" data-action="wz-complete-force">These are correct — complete</button></div>`);
+}
+function completeCheckin(force){
+  const d=DB.draft;
+  if(!force){const anom=checkAnomalies();if(anom.length){anomalyModal(anom);return;}}
+  d.status="COMPLETED";
   // clean any null-valued holdings to 0 so metrics are defined
   for(const k in d.values){if(d.values[k][0]==null)d.values[k][0]=0;}
   DB.snapshots=DB.snapshots.filter(s=>s.period!==d.period);DB.snapshots.push(d);DB.draft=null;
@@ -980,6 +1048,18 @@ function addTypeModal(){
     <div class="actions"><button class="btn" data-action="modal-close">Cancel</button>
       <button class="btn pri" data-action="add-type-save">Add type</button></div>`);
 }
+function colorModal(typeId){
+  const t=byId(DB.holdingTypes,typeId);
+  const curHex=t.color&&t.color[0]==="#"?t.color:"#7fb0e6";
+  const sw=COLOR_PRESETS.map(c=>`<button class="pre-sw ${t.color===c?"on":""}" data-action="set-color" data-id="${typeId}" data-color="${c}" style="background:${c}" title="${c}" aria-label="Use ${c}"></button>`).join("");
+  modal(`<h3>Color — ${esc(t.label)}</h3>
+    <div class="muted" style="font-size:12.5px;margin:-6px 0 14px">Pick a preset or choose a custom color. Applies everywhere this type appears — charts, legends, allocation.</div>
+    <div class="preset-grid">${sw}</div>
+    <label class="field" style="margin-top:16px"><span class="lb">Custom color</span>
+      <input type="color" data-action="set-color-input" data-id="${typeId}" value="${curHex}" style="height:42px;padding:3px;cursor:pointer"></label>
+    <div class="actions"><button class="btn" data-action="reset-color" data-id="${typeId}">Reset to default</button>
+      <button class="btn pri" data-action="modal-close">Done</button></div>`);
+}
 function openSnapshotEditor(id){
   const s=byId(DB.snapshots,id);state.editSnap=JSON.parse(JSON.stringify(s));
   const d=state.editSnap;
@@ -1020,6 +1100,11 @@ document.addEventListener("input",e=>{
     $("#wf-root").innerHTML=wfBody(nw);}
   if(a==="ev"){const s=state.editSnap,id=e.target.dataset.id,f=+e.target.dataset.f;
     s.values[id][f]=+e.target.value||0;const bv=$(`[data-ebv="${id}"]`);if(bv)bv.textContent=vnd(s.values[id][0]*s.values[id][1]);}
+  if(a==="set-color-input"){const ht=byId(DB.holdingTypes,e.target.dataset.id);ht.color=e.target.value;render();}
+  if(a==="cur-rate"){const cur=e.target.dataset.cur,rate=+e.target.value||0;
+    DB.holdings.filter(h=>h.status==="ACTIVE"&&h.cur===cur&&d.values[h.id]).forEach(h=>{d.values[h.id][1]=rate;
+      const rl=$(`[data-rate="${h.id}"]`);if(rl)rl.textContent="× "+full(rate);
+      const bv=$(`[data-bv="${h.id}"]`);if(bv)bv.textContent=d.values[h.id][0]==null?"—":vnd(d.values[h.id][0]*rate);});}
 });
 
 document.addEventListener("click",e=>{
@@ -1036,6 +1121,7 @@ document.addEventListener("click",e=>{
     case "wz-back":wz.step=Math.max(0,wz.step-1);openWizard();break;
     case "wz-exit":closeWizard();toast("Draft saved — resume anytime");break;
     case "wz-complete":completeCheckin();break;
+    case "wz-complete-force":closeModal();completeCheckin(true);break;
     case "wf-tab":state.wf=id;render();break;
     case "trend-mode":state.trendMode=id;render();break;
     case "goal":state.view="goals";state.goalId=id;render();break;
@@ -1050,6 +1136,9 @@ document.addEventListener("click",e=>{
     case "add-goal-save":saveGoal();break;
     case "add-type":addTypeModal();break;
     case "add-type-save":saveType();break;
+    case "pick-color":colorModal(id);break;
+    case "set-color":{const ht=byId(DB.holdingTypes,id);ht.color=t.dataset.color;closeModal();render();toast("Color updated");break;}
+    case "reset-color":{const ht=byId(DB.holdingTypes,id);delete ht.color;closeModal();render();toast("Color reset to default");break;}
     case "add-flow":{DB.draft.flows.push({cat:t.dataset.cat,label:"New line",amount:0});openWizard();break;}
     case "open-snap":openSnapshotEditor(id);break;
     case "save-snap":saveSnap(id);break;
