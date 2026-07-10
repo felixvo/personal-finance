@@ -14,11 +14,18 @@
 
 generator client {
   provider = "prisma-client-js"
+  // "native" for local dev; the rhel target is the query engine Vercel's
+  // serverless runtime (Amazon Linux / OpenSSL 3) needs.
+  binaryTargets = ["native", "rhel-openssl-3.0.x"]
 }
 
 datasource db {
   provider = "postgresql"
-  url      = env("DATABASE_URL")
+  // Runtime connection. On Neon this is the POOLED (…-pooler…) URL.
+  url       = env("DATABASE_URL")
+  // Migrations need a non-pooled connection. On Neon this is the DIRECT URL;
+  // locally both point at the same Docker Postgres.
+  directUrl = env("DIRECT_URL")
 }
 
 // ============================================================

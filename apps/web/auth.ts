@@ -17,6 +17,9 @@ const credentialsSchema = z.object({
  * model; onboarding (Phase 1) is what actually creates users + households.
  */
 export const { handlers, auth, signIn, signOut } = NextAuth({
+  // Trust the deployment host (Vercel sets it correctly); avoids UntrustedHost
+  // errors for this single first-party app.
+  trustHost: true,
   session: { strategy: "jwt" },
   providers: [
     Credentials({
