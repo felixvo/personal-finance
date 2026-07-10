@@ -1,6 +1,9 @@
 import { router, publicProcedure, protectedProcedure } from "../trpc";
 import { authRouter } from "./auth";
 import { householdRouter } from "./household";
+import { holdingRouter } from "./holding";
+import { checkInRouter } from "./checkin";
+import { snapshotRouter } from "./snapshot";
 
 /**
  * Root tRPC router. Grows toward the docs/08 surface as Phase 1 features land.
@@ -8,6 +11,9 @@ import { householdRouter } from "./household";
 export const appRouter = router({
   auth: authRouter,
   household: householdRouter,
+  holding: holdingRouter,
+  checkIn: checkInRouter,
+  snapshot: snapshotRouter,
 
   health: router({
     ping: publicProcedure.query(() => ({ ok: true as const, time: new Date() })),

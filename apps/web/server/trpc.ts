@@ -22,3 +22,21 @@ export const protectedProcedure = t.procedure.use((opts) => {
   }
   return opts.next({ ctx: { ...ctx, session: ctx.session } });
 });
+
+/**
+ * Requires the caller to belong to a household; exposes `ctx.householdId`.
+ * Every household-scoped resolver filters by this id, never client input.
+ */
+export const householdProcedure = protectedProcedure.use(async (opts) => {
+  const member = await opts.ctx.prisma.member.findUnique({
+    where: { userId: opts.ctx.session.user.id },
+    select: { householdId: true },
+  });
+  if (!member) {
+    throw new TRPCError({
+      code: "FORBIDDEN",
+      message: "No household yet — complete onboarding first.",
+    });
+  }
+  return opts.next({ ctx: { ...opts.ctx, householdId: member.householdId } });
+});
