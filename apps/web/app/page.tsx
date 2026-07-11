@@ -103,7 +103,8 @@ export default async function Home() {
           )}
           <p className="muted" style={{ margin: "0.5rem 0 0", fontSize: "0.8rem" }}>
             Checked in for {latest?.periodMonth}. <Link href="/assets">Assets</Link> ·{" "}
-            <Link href="/goals">Goals</Link> · <Link href="/timeline">Timeline</Link>
+            <Link href="/goals">Goals</Link> · <Link href="/what-if">What&nbsp;If</Link> ·{" "}
+            <Link href="/timeline">Timeline</Link>
           </p>
         </div>
       </main>
