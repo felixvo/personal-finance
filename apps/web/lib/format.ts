@@ -25,3 +25,9 @@ export function formatMonthShort(period: string): string {
   const mon = m ? MONTHS_SHORT[m - 1] : undefined;
   return mon && y ? `${mon} '${String(y).slice(-2)}` : period;
 }
+
+/** "2026-07" → "Jul" (no year), for per-month axis ticks. */
+export function monthShort(period: string): string {
+  const m = Number(period.split("-")[1]);
+  return m ? (MONTHS_SHORT[m - 1] ?? period) : period;
+}

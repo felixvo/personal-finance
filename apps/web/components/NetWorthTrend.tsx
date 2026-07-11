@@ -1,4 +1,4 @@
-import { formatMoney, formatMonthShort } from "@/lib/format";
+import { formatMoney, formatMonthShort, monthShort } from "@/lib/format";
 
 /**
  * Net worth across the last check-ins — a single-series line chart, so no
@@ -56,16 +56,37 @@ export function NetWorthTrend({
       })}
       <polygon points={area} fill="var(--accent)" opacity={0.12} />
       <polyline points={pts} fill="none" stroke="var(--accent)" strokeWidth={2} strokeLinejoin="round" strokeLinecap="round" />
-      <circle cx={X(values.length - 1)} cy={Y(last)} r={4} fill="var(--accent)" stroke="var(--surface)" strokeWidth={2} />
+
+      {/* a marker at every month, the last one emphasised */}
+      {values.map((v, i) => {
+        const isLast = i === values.length - 1;
+        return (
+          <circle
+            key={i}
+            cx={X(i)}
+            cy={Y(v)}
+            r={isLast ? 4 : 2.4}
+            fill="var(--accent)"
+            stroke="var(--surface)"
+            strokeWidth={isLast ? 2 : 1}
+          />
+        );
+      })}
+
       <text x={W - pr} y={Math.max(13, Y(last) - 8)} textAnchor="end" fontSize={12} fontWeight={600} fill="var(--ink)">
         {formatMoney(last, baseCurrency)}
       </text>
-      <text x={pl} y={H - 7} textAnchor="start" fontSize={11} fill="var(--muted)">
-        {formatMonthShort(periods[0]!)}
-      </text>
-      <text x={W - pr} y={H - 7} textAnchor="end" fontSize={11} fill="var(--muted)">
-        {formatMonthShort(periods[periods.length - 1]!)}
-      </text>
+
+      {/* per-month axis labels along the bottom; year shown at the first tick and each January */}
+      {periods.map((p, i) => {
+        const anchor = i === 0 ? "start" : i === periods.length - 1 ? "end" : "middle";
+        const label = i === 0 || p.endsWith("-01") ? formatMonthShort(p) : monthShort(p);
+        return (
+          <text key={p} x={X(i)} y={H - 7} textAnchor={anchor} fontSize={10.5} fill="var(--muted)">
+            {label}
+          </text>
+        );
+      })}
     </svg>
   );
 }
