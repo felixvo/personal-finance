@@ -1,3 +1,4 @@
+import { randomUUID } from "node:crypto";
 import { z } from "zod";
 import { TRPCError } from "@trpc/server";
 import { computeMetrics, valueBase as computeValueBase, Decimal } from "@atlas/calc-engine";
@@ -253,58 +254,67 @@ export const snapshotRouter = router({
         })),
       });
 
-      await ctx.prisma.$transaction(async (tx) => {
-        for (const h of holdingUpdates) {
-          await tx.snapshotHolding.update({
-            where: { snapshotId_holdingId: { snapshotId: snap.id, holdingId: h.holdingId } },
-            data: { value: h.value, fxRateToBase: h.fxRate, valueBase: h.valueBase },
-          });
-        }
-        for (const h of newHoldingPrepared) {
-          const created = await tx.holding.create({
+      // Pre-generate ids so new holdings and their snapshot rows go in as two
+      // bulk inserts, not a create-per-holding. A long chain of sequential
+      // writes here overran the interactive-transaction timeout when many
+      // holdings were added at once over the remote database.
+      const newWithIds = newHoldingPrepared.map((h) => ({ ...h, id: randomUUID() }));
+
+      await ctx.prisma.$transaction(
+        async (tx) => {
+          for (const h of holdingUpdates) {
+            await tx.snapshotHolding.update({
+              where: { snapshotId_holdingId: { snapshotId: snap.id, holdingId: h.holdingId } },
+              data: { value: h.value, fxRateToBase: h.fxRate, valueBase: h.valueBase },
+            });
+          }
+          if (newWithIds.length > 0) {
+            await tx.holding.createMany({
+              data: newWithIds.map((h) => ({
+                id: h.id,
+                householdId: ctx.householdId,
+                holdingTypeId: h.holdingTypeId,
+                name: h.name,
+                institution: h.institution,
+                currency: h.currency,
+                status: "ACTIVE",
+              })),
+            });
+            await tx.snapshotHolding.createMany({
+              data: newWithIds.map((h) => ({
+                snapshotId: snap.id,
+                holdingId: h.id,
+                value: h.value,
+                fxRateToBase: h.fxRate,
+                valueBase: h.valueBase,
+              })),
+            });
+          }
+          await tx.snapshotCashFlow.deleteMany({ where: { snapshotId: snap.id } });
+          if (input.cashFlows.length > 0) {
+            await tx.snapshotCashFlow.createMany({
+              data: input.cashFlows.map((cf) => ({
+                snapshotId: snap.id,
+                category: cf.category,
+                label: cf.label,
+                amount: cf.amount,
+              })),
+            });
+          }
+          await tx.monthlySnapshot.update({
+            where: { id: snap.id },
             data: {
-              householdId: ctx.householdId,
-              holdingTypeId: h.holdingTypeId,
-              name: h.name,
-              institution: h.institution,
-              currency: h.currency,
-              status: "ACTIVE",
-            },
-            select: { id: true },
-          });
-          await tx.snapshotHolding.create({
-            data: {
-              snapshotId: snap.id,
-              holdingId: created.id,
-              value: h.value,
-              fxRateToBase: h.fxRate,
-              valueBase: h.valueBase,
+              version: { increment: 1 },
+              netWorthBase: metrics.netWorth.toString(),
+              investableAssetsBase: metrics.investableAssets.toString(),
+              cashPositionBase: metrics.cashPosition.toString(),
+              passiveIncomeBase: metrics.passiveIncome.toString(),
+              savingsRate: metrics.savingsRate != null ? metrics.savingsRate.toString() : null,
             },
           });
-        }
-        await tx.snapshotCashFlow.deleteMany({ where: { snapshotId: snap.id } });
-        if (input.cashFlows.length > 0) {
-          await tx.snapshotCashFlow.createMany({
-            data: input.cashFlows.map((cf) => ({
-              snapshotId: snap.id,
-              category: cf.category,
-              label: cf.label,
-              amount: cf.amount,
-            })),
-          });
-        }
-        await tx.monthlySnapshot.update({
-          where: { id: snap.id },
-          data: {
-            version: { increment: 1 },
-            netWorthBase: metrics.netWorth.toString(),
-            investableAssetsBase: metrics.investableAssets.toString(),
-            cashPositionBase: metrics.cashPosition.toString(),
-            passiveIncomeBase: metrics.passiveIncome.toString(),
-            savingsRate: metrics.savingsRate != null ? metrics.savingsRate.toString() : null,
-          },
-        });
-      });
+        },
+        { timeout: 15_000, maxWait: 10_000 },
+      );
 
       return { id: snap.id };
     }),

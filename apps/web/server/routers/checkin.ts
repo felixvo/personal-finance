@@ -62,23 +62,34 @@ export const checkInRouter = router({
           select: { id: true },
         });
         const prevByHolding = new Map(last.holdings.map((h) => [h.holdingId, h]));
-        for (const h of active) {
+        // Bulk-insert the copy-forward rows: a create-per-holding here would run
+        // one round-trip per active holding and, for a large household, overrun
+        // the interactive-transaction timeout over the remote database.
+        const holdingRows = active.flatMap((h) => {
           const prev = prevByHolding.get(h.id);
-          if (prev) {
-            await tx.snapshotHolding.create({
-              data: {
-                snapshotId: snap.id,
-                holdingId: h.id,
-                value: prev.value,
-                fxRateToBase: prev.fxRateToBase,
-                valueBase: prev.valueBase,
-              },
-            });
-          }
+          return prev
+            ? [
+                {
+                  snapshotId: snap.id,
+                  holdingId: h.id,
+                  value: prev.value,
+                  fxRateToBase: prev.fxRateToBase,
+                  valueBase: prev.valueBase,
+                },
+              ]
+            : [];
+        });
+        if (holdingRows.length > 0) {
+          await tx.snapshotHolding.createMany({ data: holdingRows });
         }
-        for (const cf of last.cashFlows) {
-          await tx.snapshotCashFlow.create({
-            data: { snapshotId: snap.id, category: cf.category, label: cf.label, amount: cf.amount },
+        if (last.cashFlows.length > 0) {
+          await tx.snapshotCashFlow.createMany({
+            data: last.cashFlows.map((cf) => ({
+              snapshotId: snap.id,
+              category: cf.category,
+              label: cf.label,
+              amount: cf.amount,
+            })),
           });
         }
       }
