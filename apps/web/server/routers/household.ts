@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { TRPCError } from "@trpc/server";
-import { router, protectedProcedure } from "../trpc";
+import { router, protectedProcedure, householdProcedure } from "../trpc";
 import { CURRENCY_CODES } from "@/lib/currencies";
 
 export const householdRouter = router({
@@ -58,5 +58,25 @@ export const householdRouter = router({
       });
 
       return { id: household.id, name: household.name };
+    }),
+
+  /**
+   * Edit household settings (docs/01 §3.9). Base currency is intentionally not
+   * editable here — changing it post-creation is a v2 concern (docs/09 §6).
+   */
+  // TODO(invites): gate to OWNER once multi-member households exist.
+  update: householdProcedure
+    .input(
+      z.object({
+        name: z.string().trim().min(1).max(100),
+        checkInDay: z.number().int().min(1).max(28),
+      }),
+    )
+    .mutation(async ({ ctx, input }) => {
+      await ctx.prisma.household.update({
+        where: { id: ctx.householdId },
+        data: { name: input.name, checkInDay: input.checkInDay },
+      });
+      return { ok: true };
     }),
 });

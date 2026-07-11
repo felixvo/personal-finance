@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { requireHousehold } from "@/lib/session";
 import { signOut } from "@/auth";
+import { HouseholdSettingsForm } from "./HouseholdSettingsForm";
 
 export default async function SettingsPage() {
   const { session, member } = await requireHousehold();
@@ -25,16 +26,12 @@ export default async function SettingsPage() {
 
       <section className="card" style={{ maxWidth: "none", marginBottom: "1rem" }}>
         <h2 style={{ margin: "0 0 0.6rem", fontSize: "0.95rem" }}>Household</h2>
-        <dl style={{ margin: 0, display: "grid", gridTemplateColumns: "auto 1fr", gap: "0.35rem 1rem", fontSize: "0.9rem" }}>
-          <dt className="muted">Name</dt>
-          <dd style={{ margin: 0 }}>{h.name}</dd>
-          <dt className="muted">Base currency</dt>
-          <dd style={{ margin: 0 }}>{h.baseCurrency}</dd>
-          <dt className="muted">Check-in day</dt>
-          <dd style={{ margin: 0 }}>{h.checkInDay}</dd>
-          <dt className="muted">Signed in as</dt>
-          <dd style={{ margin: 0 }}>{session.user.email}</dd>
-        </dl>
+        <HouseholdSettingsForm
+          initialName={h.name}
+          initialCheckInDay={h.checkInDay}
+          baseCurrency={h.baseCurrency}
+          email={session.user.email}
+        />
       </section>
 
       <section className="card" style={{ maxWidth: "none", marginBottom: "1rem" }}>
