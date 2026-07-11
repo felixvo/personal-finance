@@ -114,10 +114,12 @@ export const snapshotRouter = router({
 
   /**
    * Edit a completed snapshot (Flow 8) — correct recorded holding values and
-   * cash-flow lines after the fact, then recompute the cached metrics over the
-   * new figures and bump `version` (Timeline marks a v>1 snapshot "edited").
-   * The payload must cover exactly the snapshot's holdings so the recompute runs
-   * over the complete position; cash flows are replaced wholesale. Atomic.
+   * cash-flow lines after the fact, optionally add holdings that were missing
+   * from that month, then recompute the cached metrics over the new figures and
+   * bump `version` (Timeline marks a v>1 snapshot "edited"). `holdings` must
+   * cover exactly the snapshot's existing holdings; `newHoldings` create fresh
+   * Holding records (like Flow 4) and add them to this snapshot only. Cash flows
+   * are replaced wholesale. Atomic.
    */
   edit: householdProcedure
     .input(
@@ -132,6 +134,18 @@ export const snapshotRouter = router({
             }),
           )
           .min(1),
+        newHoldings: z
+          .array(
+            z.object({
+              name: z.string().trim().min(1).max(100),
+              holdingTypeId: z.string().uuid(),
+              institution: z.string().trim().max(100).optional(),
+              currency: z.string().trim().min(1).max(12),
+              value: moneyString,
+              fxRateToBase: moneyString.optional(),
+            }),
+          )
+          .default([]),
         cashFlows: z.array(
           z.object({
             category: cashFlowCategory,
@@ -191,8 +205,43 @@ export const snapshotRouter = router({
         };
       });
 
+      // Prepare any brand-new holdings to create + record in this snapshot.
+      // Their types must belong to the household (or be a global seed type), and
+      // a per-unit rate is required for a non-base currency (mirrors Flow 4).
+      const newTypeIds = [...new Set(input.newHoldings.map((h) => h.holdingTypeId))];
+      const types = newTypeIds.length
+        ? await ctx.prisma.holdingType.findMany({
+            where: { id: { in: newTypeIds }, OR: [{ householdId: ctx.householdId }, { householdId: null }] },
+            select: { id: true, classification: true, isInvestable: true, isCash: true },
+          })
+        : [];
+      const typeById = new Map(types.map((t) => [t.id, t]));
+
+      const newHoldingPrepared = input.newHoldings.map((h) => {
+        const type = typeById.get(h.holdingTypeId);
+        if (!type) throw new TRPCError({ code: "BAD_REQUEST", message: "Unknown holding type." });
+        const currency = h.currency.toUpperCase();
+        const isBase = currency === baseCurrency;
+        if (!isBase && !h.fxRateToBase) {
+          throw new TRPCError({ code: "BAD_REQUEST", message: "A per-unit rate is required for a non-base currency." });
+        }
+        const fxRate = isBase ? "1" : h.fxRateToBase!;
+        return {
+          name: h.name,
+          holdingTypeId: h.holdingTypeId,
+          institution: h.institution,
+          currency,
+          value: h.value,
+          fxRate,
+          valueBase: computeValueBase(h.value, fxRate).toString(),
+          classification: type.classification,
+          isInvestable: type.isInvestable,
+          isCash: type.isCash,
+        };
+      });
+
       const metrics = computeMetrics({
-        holdings: holdingUpdates.map((h) => ({
+        holdings: [...holdingUpdates, ...newHoldingPrepared].map((h) => ({
           valueBase: new Decimal(h.valueBase),
           classification: h.classification,
           isInvestable: h.isInvestable,
@@ -209,6 +258,28 @@ export const snapshotRouter = router({
           await tx.snapshotHolding.update({
             where: { snapshotId_holdingId: { snapshotId: snap.id, holdingId: h.holdingId } },
             data: { value: h.value, fxRateToBase: h.fxRate, valueBase: h.valueBase },
+          });
+        }
+        for (const h of newHoldingPrepared) {
+          const created = await tx.holding.create({
+            data: {
+              householdId: ctx.householdId,
+              holdingTypeId: h.holdingTypeId,
+              name: h.name,
+              institution: h.institution,
+              currency: h.currency,
+              status: "ACTIVE",
+            },
+            select: { id: true },
+          });
+          await tx.snapshotHolding.create({
+            data: {
+              snapshotId: snap.id,
+              holdingId: created.id,
+              value: h.value,
+              fxRateToBase: h.fxRate,
+              valueBase: h.valueBase,
+            },
           });
         }
         await tx.snapshotCashFlow.deleteMany({ where: { snapshotId: snap.id } });

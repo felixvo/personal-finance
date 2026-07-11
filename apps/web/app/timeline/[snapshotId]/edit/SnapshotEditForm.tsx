@@ -18,6 +18,27 @@ const CATEGORY_OPTIONS = Object.keys(CATEGORY_LABELS);
 type Snapshot = RouterOutputs["snapshot"]["getById"];
 type CashCat = "ACTIVE_INCOME" | "PASSIVE_INCOME" | "EXPENSE" | "INVESTMENT_CONTRIBUTION";
 
+type NewHolding = {
+  key: number;
+  name: string;
+  holdingTypeId: string;
+  typeLabel: string;
+  classification: string;
+  institution: string;
+  currency: string;
+  isBase: boolean;
+  value: string;
+  fxRateToBase: string;
+};
+
+// Signed base-currency contribution of a holding-like row, mirroring the
+// calc-engine (assets add, liabilities subtract); ignores non-numeric drafts.
+function signedBase(h: { value: string; fxRateToBase: string; isBase: boolean; classification: string }) {
+  const base = Number(h.value) * (h.isBase ? 1 : Number(h.fxRateToBase) || 0);
+  const signed = h.classification === "ASSET" ? base : -base;
+  return Number.isFinite(signed) ? signed : 0;
+}
+
 export function SnapshotEditForm({
   snapshot,
   baseCurrency,
@@ -27,6 +48,7 @@ export function SnapshotEditForm({
 }) {
   const router = useRouter();
   const edit = trpc.snapshot.edit.useMutation();
+  const typesQ = trpc.holding.listTypes.useQuery();
 
   const [holdings, setHoldings] = useState(
     snapshot.holdings.map((h) => ({
@@ -40,6 +62,8 @@ export function SnapshotEditForm({
       fxRateToBase: h.fxRateToBase,
     })),
   );
+  const [newHoldings, setNewHoldings] = useState<NewHolding[]>([]);
+  const [nextHKey, setNextHKey] = useState(0);
   const [cashRows, setCashRows] = useState(
     snapshot.cashFlows.map((cf, i) => ({
       key: i,
@@ -51,8 +75,22 @@ export function SnapshotEditForm({
   const [nextKey, setNextKey] = useState(snapshot.cashFlows.length);
   const [err, setErr] = useState<string | null>(null);
 
+  // "Add a holding" mini-form (client-side; created on Save).
+  const [showAdd, setShowAdd] = useState(false);
+  const [hName, setHName] = useState("");
+  const [hType, setHType] = useState("");
+  const [hInst, setHInst] = useState("");
+  const [hCurrency, setHCurrency] = useState(baseCurrency);
+  const [hValue, setHValue] = useState("");
+  const [hFx, setHFx] = useState("");
+  const [hErr, setHErr] = useState<string | null>(null);
+  const needsFx = hCurrency.trim().toUpperCase() !== baseCurrency;
+
   const setHolding = (id: string, patch: Partial<{ value: string; fxRateToBase: string }>) =>
     setHoldings((prev) => prev.map((h) => (h.holdingId === id ? { ...h, ...patch } : h)));
+  const setNewH = (key: number, patch: Partial<{ value: string; fxRateToBase: string }>) =>
+    setNewHoldings((prev) => prev.map((h) => (h.key === key ? { ...h, ...patch } : h)));
+  const removeNewH = (key: number) => setNewHoldings((prev) => prev.filter((h) => h.key !== key));
   const setCash = (key: number, patch: Partial<{ category: string; label: string; amount: string }>) =>
     setCashRows((prev) => prev.map((c) => (c.key === key ? { ...c, ...patch } : c)));
   const removeCash = (key: number) => setCashRows((prev) => prev.filter((c) => c.key !== key));
@@ -61,15 +99,51 @@ export function SnapshotEditForm({
     setNextKey((k) => k + 1);
   };
 
-  // Live net-worth preview, mirroring the calc-engine's asset/liability signing.
+  function onAddHolding() {
+    setHErr(null);
+    const type = typesQ.data?.find((t) => t.id === hType);
+    if (!hName.trim() || !type) {
+      setHErr("Name and type are required.");
+      return;
+    }
+    if (!hValue.trim()) {
+      setHErr("Enter a value.");
+      return;
+    }
+    const currency = hCurrency.trim().toUpperCase();
+    const isBase = currency === baseCurrency;
+    if (!isBase && !hFx.trim()) {
+      setHErr("A per-unit rate is required for a non-base currency.");
+      return;
+    }
+    setNewHoldings((prev) => [
+      ...prev,
+      {
+        key: nextHKey,
+        name: hName.trim(),
+        holdingTypeId: type.id,
+        typeLabel: type.label,
+        classification: type.classification,
+        institution: hInst.trim(),
+        currency,
+        isBase,
+        value: hValue,
+        fxRateToBase: isBase ? "1" : hFx,
+      },
+    ]);
+    setNextHKey((k) => k + 1);
+    setHName("");
+    setHType("");
+    setHInst("");
+    setHCurrency(baseCurrency);
+    setHValue("");
+    setHFx("");
+    setShowAdd(false);
+  }
+
   const preview = useMemo(
-    () =>
-      holdings.reduce((sum, h) => {
-        const base = Number(h.value) * (h.isBase ? 1 : Number(h.fxRateToBase) || 0);
-        const signed = h.classification === "ASSET" ? base : -base;
-        return sum + (Number.isFinite(signed) ? signed : 0);
-      }, 0),
-    [holdings],
+    () => [...holdings, ...newHoldings].reduce((sum, h) => sum + signedBase(h), 0),
+    [holdings, newHoldings],
   );
 
   async function onSave(e: FormEvent) {
@@ -80,6 +154,14 @@ export function SnapshotEditForm({
         snapshotId: snapshot.id,
         holdings: holdings.map((h) => ({
           holdingId: h.holdingId,
+          value: h.value,
+          fxRateToBase: h.isBase ? undefined : h.fxRateToBase,
+        })),
+        newHoldings: newHoldings.map((h) => ({
+          name: h.name,
+          holdingTypeId: h.holdingTypeId,
+          institution: h.institution || undefined,
+          currency: h.currency,
           value: h.value,
           fxRateToBase: h.isBase ? undefined : h.fxRateToBase,
         })),
@@ -106,6 +188,9 @@ export function SnapshotEditForm({
     padding: "0.55rem 0.8rem",
   };
 
+  const assetTypes = typesQ.data?.filter((t) => t.classification === "ASSET") ?? [];
+  const liabilityTypes = typesQ.data?.filter((t) => t.classification === "LIABILITY") ?? [];
+
   return (
     <form onSubmit={onSave} style={{ maxWidth: "48rem", margin: "0 auto", padding: "2rem 1.5rem" }}>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline" }}>
@@ -118,8 +203,8 @@ export function SnapshotEditForm({
         Correct {snapshot.periodMonth}
       </h1>
       <p className="muted" style={{ marginTop: 0, fontSize: "0.85rem" }}>
-        Fix a recorded value or income/expense line. Saving recomputes this month&rsquo;s figures and
-        marks it edited.
+        Fix a recorded value, add a holding that was missing, or adjust an income/expense line. Saving
+        recomputes this month&rsquo;s figures and marks it edited.
       </p>
 
       {/* ---- Holdings ---- */}
@@ -163,7 +248,112 @@ export function SnapshotEditForm({
               </div>
             </li>
           ))}
+
+          {newHoldings.map((h) => (
+            <li key={`new-${h.key}`} style={row}>
+              <div style={{ minWidth: 0 }}>
+                <div style={{ fontWeight: 600, fontSize: "0.92rem" }}>
+                  {h.name}{" "}
+                  <span className="muted" style={{ fontWeight: 400 }}>
+                    · {h.typeLabel}
+                    {h.classification === "LIABILITY" ? " (liability)" : ""} · new
+                  </span>
+                </div>
+              </div>
+              <div style={{ display: "flex", alignItems: "center", gap: "0.4rem" }}>
+                <input
+                  className="input"
+                  inputMode="decimal"
+                  value={h.value}
+                  onChange={(e) => setNewH(h.key, { value: e.target.value })}
+                  aria-label={`${h.name} value`}
+                  style={{ width: "7.5rem", padding: "0.35rem 0.5rem" }}
+                />
+                <span className="muted" style={{ fontSize: "0.8rem" }}>
+                  {h.currency}
+                </span>
+                {!h.isBase && (
+                  <input
+                    className="input"
+                    inputMode="decimal"
+                    value={h.fxRateToBase}
+                    onChange={(e) => setNewH(h.key, { fxRateToBase: e.target.value })}
+                    title={`Price of 1 ${h.currency} in ${baseCurrency}`}
+                    aria-label={`${h.name} rate`}
+                    style={{ width: "8.5rem", padding: "0.35rem 0.5rem" }}
+                  />
+                )}
+                <button className="btn-ghost" type="button" onClick={() => removeNewH(h.key)}>
+                  Remove
+                </button>
+              </div>
+            </li>
+          ))}
         </ul>
+
+        {showAdd ? (
+          <div style={{ borderTop: "1px solid var(--border)", marginTop: "1rem", paddingTop: "1rem" }}>
+            {hErr && <p className="error">{hErr}</p>}
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(11rem, 1fr))", gap: "0.75rem" }}>
+              <div className="field">
+                <label htmlFor="nh-name">Name</label>
+                <input id="nh-name" className="input" value={hName} onChange={(e) => setHName(e.target.value)} placeholder="Techcombank savings" />
+              </div>
+              <div className="field">
+                <label htmlFor="nh-type">Type</label>
+                <select id="nh-type" className="select" value={hType} onChange={(e) => setHType(e.target.value)} disabled={typesQ.isPending}>
+                  <option value="" disabled>
+                    {typesQ.isPending ? "Loading…" : "Choose a type…"}
+                  </option>
+                  <optgroup label="Assets">
+                    {assetTypes.map((t) => (
+                      <option key={t.id} value={t.id}>
+                        {t.label}
+                      </option>
+                    ))}
+                  </optgroup>
+                  <optgroup label="Liabilities">
+                    {liabilityTypes.map((t) => (
+                      <option key={t.id} value={t.id}>
+                        {t.label}
+                      </option>
+                    ))}
+                  </optgroup>
+                </select>
+              </div>
+              <div className="field">
+                <label htmlFor="nh-inst">Institution (optional)</label>
+                <input id="nh-inst" className="input" value={hInst} onChange={(e) => setHInst(e.target.value)} />
+              </div>
+              <div className="field">
+                <label htmlFor="nh-cur">Currency</label>
+                <input id="nh-cur" className="input" value={hCurrency} onChange={(e) => setHCurrency(e.target.value.toUpperCase())} placeholder={baseCurrency} />
+              </div>
+              <div className="field">
+                <label htmlFor="nh-val">{needsFx ? "Amount (native units)" : "Value"}</label>
+                <input id="nh-val" className="input" inputMode="decimal" value={hValue} onChange={(e) => setHValue(e.target.value)} placeholder="0" />
+              </div>
+              {needsFx && (
+                <div className="field">
+                  <label htmlFor="nh-fx">Price of 1 {hCurrency.trim().toUpperCase()} in {baseCurrency}</label>
+                  <input id="nh-fx" className="input" inputMode="decimal" value={hFx} onChange={(e) => setHFx(e.target.value)} placeholder="0" />
+                </div>
+              )}
+            </div>
+            <div style={{ display: "flex", gap: "0.6rem", marginTop: "0.25rem" }}>
+              <button className="btn" type="button" onClick={onAddHolding} style={{ width: "auto", padding: "0.5rem 1rem" }}>
+                Add to this month
+              </button>
+              <button className="btn-ghost" type="button" onClick={() => { setShowAdd(false); setHErr(null); }}>
+                Cancel
+              </button>
+            </div>
+          </div>
+        ) : (
+          <button className="btn-ghost" type="button" onClick={() => setShowAdd(true)} style={{ marginTop: "0.75rem" }}>
+            + Add a holding
+          </button>
+        )}
       </section>
 
       {/* ---- Income & Expenses ---- */}
