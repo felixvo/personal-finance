@@ -3,7 +3,7 @@ import { TRPCError } from "@trpc/server";
 import { valueBase as computeValueBase } from "@atlas/calc-engine";
 import { router, householdProcedure } from "../trpc";
 import { moneyString } from "../money";
-import { currentPeriodMonth } from "../period";
+import { currentPeriodMonth, formatPeriod } from "../period";
 
 export const holdingRouter = router({
   /** Active holdings for this household (powers /assets add + goal subset picker). */
@@ -30,6 +30,52 @@ export const holdingRouter = router({
       },
     }),
   ),
+
+  /**
+   * One holding's detail + its value across completed snapshots (docs/01 §3.4).
+   * Powers the /assets/[holdingId] page.
+   */
+  getDetail: householdProcedure
+    .input(z.object({ holdingId: z.string().uuid() }))
+    .query(async ({ ctx, input }) => {
+      const holding = await ctx.prisma.holding.findFirst({
+        where: { id: input.holdingId, householdId: ctx.householdId },
+        select: {
+          id: true,
+          name: true,
+          institution: true,
+          currency: true,
+          status: true,
+          holdingType: { select: { label: true, classification: true } },
+        },
+      });
+      if (!holding) throw new TRPCError({ code: "NOT_FOUND" });
+
+      const rows = await ctx.prisma.snapshotHolding.findMany({
+        where: { holdingId: holding.id, snapshot: { status: "COMPLETED" } },
+        orderBy: { snapshot: { periodMonth: "asc" } },
+        select: {
+          value: true,
+          valueBase: true,
+          snapshot: { select: { periodMonth: true } },
+        },
+      });
+
+      return {
+        id: holding.id,
+        name: holding.name,
+        institution: holding.institution,
+        currency: holding.currency,
+        status: holding.status,
+        typeLabel: holding.holdingType.label,
+        classification: holding.holdingType.classification,
+        history: rows.map((r) => ({
+          periodMonth: formatPeriod(r.snapshot.periodMonth),
+          value: r.value.toString(),
+          valueBase: r.valueBase.toString(),
+        })),
+      };
+    }),
 
   /**
    * Flow 4 — create a holding. When a DRAFT snapshot is open, also write its

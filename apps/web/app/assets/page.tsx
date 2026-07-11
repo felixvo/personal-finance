@@ -94,11 +94,11 @@ export default async function AssetsPage() {
             </span>
           </div>
           <ul style={{ listStyle: "none", margin: 0, padding: 0, display: "flex", flexDirection: "column", gap: "0.35rem" }}>
-            {g.holdings.map((h, idx) => (
-              <li key={idx} style={{ display: "flex", justifyContent: "space-between", gap: "1rem", fontSize: "0.88rem" }}>
-                <span>
+            {g.holdings.map((h) => (
+              <li key={h.holdingId} style={{ display: "flex", justifyContent: "space-between", gap: "1rem", fontSize: "0.88rem" }}>
+                <Link href={`/assets/${h.holdingId}`} style={{ textDecoration: "none", color: "inherit" }}>
                   {h.name} <span className="muted">· {h.currency}</span>
-                </span>
+                </Link>
                 <span style={{ fontVariantNumeric: "tabular-nums" }}>{formatMoney(Number(h.valueBase), cur)}</span>
               </li>
             ))}

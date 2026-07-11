@@ -10,10 +10,12 @@ export function NetWorthTrend({
   periods,
   values,
   baseCurrency,
+  ariaLabel = "Net worth over time",
 }: {
   periods: string[];
   values: number[];
   baseCurrency: string;
+  ariaLabel?: string;
 }) {
   if (values.length < 2) {
     return (
@@ -47,7 +49,7 @@ export function NetWorthTrend({
     <svg
       viewBox={`0 0 ${W} ${H}`}
       role="img"
-      aria-label="Net worth over time"
+      aria-label={ariaLabel}
       style={{ width: "100%", height: "auto", display: "block" }}
     >
       {[0, 0.5, 1].map((f) => {

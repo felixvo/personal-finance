@@ -16,6 +16,7 @@ export const assetsRouter = router({
     if (!snap) return null;
 
     const rows = snap.holdings.map((sh) => ({
+      holdingId: sh.holding.id,
       name: sh.holding.name,
       currency: sh.holding.currency,
       typeSlug: sh.holding.holdingType.slug,
@@ -31,7 +32,7 @@ export const assetsRouter = router({
       {
         typeLabel: string;
         classification: "ASSET" | "LIABILITY";
-        holdings: { name: string; currency: string; valueBase: string }[];
+        holdings: { holdingId: string; name: string; currency: string; valueBase: string }[];
         total: number;
       }
     >();
@@ -39,7 +40,7 @@ export const assetsRouter = router({
       const g =
         groupMap.get(r.typeSlug) ??
         { typeLabel: r.typeLabel, classification: r.classification, holdings: [], total: 0 };
-      g.holdings.push({ name: r.name, currency: r.currency, valueBase: r.valueBaseStr });
+      g.holdings.push({ holdingId: r.holdingId, name: r.name, currency: r.currency, valueBase: r.valueBaseStr });
       g.total += r.valueBase;
       groupMap.set(r.typeSlug, g);
     }
