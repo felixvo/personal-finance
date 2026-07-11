@@ -41,9 +41,14 @@ export default async function SnapshotDetailPage({
           Check-in · {snap.periodMonth}
           {snap.edited ? " · edited" : ""}
         </p>
-        <Link href="/timeline" className="muted" style={{ fontSize: "0.85rem" }}>
-          Timeline
-        </Link>
+        <div style={{ display: "flex", gap: "0.9rem", alignItems: "baseline" }}>
+          <Link href={`/timeline/${snap.id}/edit`} className="muted" style={{ fontSize: "0.85rem" }}>
+            Edit
+          </Link>
+          <Link href="/timeline" className="muted" style={{ fontSize: "0.85rem" }}>
+            Timeline
+          </Link>
+        </div>
       </div>
       <h1 className="title" style={{ marginTop: "0.4rem" }}>
         {snap.periodMonth}

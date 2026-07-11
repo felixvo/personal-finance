@@ -1,7 +1,16 @@
 import { z } from "zod";
 import { TRPCError } from "@trpc/server";
+import { computeMetrics, valueBase as computeValueBase, Decimal } from "@atlas/calc-engine";
 import { router, householdProcedure } from "../trpc";
 import { formatPeriod } from "../period";
+import { moneyString } from "../money";
+
+const cashFlowCategory = z.enum([
+  "ACTIVE_INCOME",
+  "PASSIVE_INCOME",
+  "EXPENSE",
+  "INVESTMENT_CONTRIBUTION",
+]);
 
 export const snapshotRouter = router({
   /**
@@ -91,6 +100,7 @@ export const snapshotRouter = router({
           typeLabel: sh.holding.holdingType.label,
           classification: sh.holding.holdingType.classification,
           value: sh.value.toString(),
+          fxRateToBase: sh.fxRateToBase.toString(),
           valueBase: sh.valueBase.toString(),
         })),
         cashFlows: snap.cashFlows.map((cf) => ({
@@ -100,5 +110,131 @@ export const snapshotRouter = router({
           amount: cf.amount.toString(),
         })),
       };
+    }),
+
+  /**
+   * Edit a completed snapshot (Flow 8) — correct recorded holding values and
+   * cash-flow lines after the fact, then recompute the cached metrics over the
+   * new figures and bump `version` (Timeline marks a v>1 snapshot "edited").
+   * The payload must cover exactly the snapshot's holdings so the recompute runs
+   * over the complete position; cash flows are replaced wholesale. Atomic.
+   */
+  edit: householdProcedure
+    .input(
+      z.object({
+        snapshotId: z.string().uuid(),
+        holdings: z
+          .array(
+            z.object({
+              holdingId: z.string().uuid(),
+              value: moneyString,
+              fxRateToBase: moneyString.optional(),
+            }),
+          )
+          .min(1),
+        cashFlows: z.array(
+          z.object({
+            category: cashFlowCategory,
+            label: z.string().trim().min(1).max(100),
+            amount: moneyString,
+          }),
+        ),
+      }),
+    )
+    .mutation(async ({ ctx, input }) => {
+      const snap = await ctx.prisma.monthlySnapshot.findUnique({
+        where: { id: input.snapshotId },
+        include: {
+          holdings: {
+            include: {
+              holding: {
+                select: {
+                  currency: true,
+                  holdingType: { select: { classification: true, isInvestable: true, isCash: true } },
+                },
+              },
+            },
+          },
+        },
+      });
+      if (!snap || snap.householdId !== ctx.householdId || snap.status !== "COMPLETED") {
+        throw new TRPCError({ code: "NOT_FOUND" });
+      }
+
+      const existingByHolding = new Map(snap.holdings.map((sh) => [sh.holdingId, sh]));
+      const inputIds = new Set(input.holdings.map((h) => h.holdingId));
+      if (
+        inputIds.size !== input.holdings.length ||
+        inputIds.size !== existingByHolding.size ||
+        [...inputIds].some((id) => !existingByHolding.has(id))
+      ) {
+        throw new TRPCError({ code: "BAD_REQUEST", message: "Holdings don't match this check-in." });
+      }
+
+      const { baseCurrency } = await ctx.prisma.household.findUniqueOrThrow({
+        where: { id: ctx.householdId },
+        select: { baseCurrency: true },
+      });
+
+      const holdingUpdates = input.holdings.map((h) => {
+        const existing = existingByHolding.get(h.holdingId)!;
+        const isBase = existing.holding.currency === baseCurrency;
+        const fxRate = isBase ? "1" : (h.fxRateToBase ?? existing.fxRateToBase.toString());
+        return {
+          holdingId: h.holdingId,
+          value: h.value,
+          fxRate,
+          valueBase: computeValueBase(h.value, fxRate).toString(),
+          classification: existing.holding.holdingType.classification,
+          isInvestable: existing.holding.holdingType.isInvestable,
+          isCash: existing.holding.holdingType.isCash,
+        };
+      });
+
+      const metrics = computeMetrics({
+        holdings: holdingUpdates.map((h) => ({
+          valueBase: new Decimal(h.valueBase),
+          classification: h.classification,
+          isInvestable: h.isInvestable,
+          isCash: h.isCash,
+        })),
+        cashFlows: input.cashFlows.map((cf) => ({
+          category: cf.category,
+          amount: new Decimal(cf.amount),
+        })),
+      });
+
+      await ctx.prisma.$transaction(async (tx) => {
+        for (const h of holdingUpdates) {
+          await tx.snapshotHolding.update({
+            where: { snapshotId_holdingId: { snapshotId: snap.id, holdingId: h.holdingId } },
+            data: { value: h.value, fxRateToBase: h.fxRate, valueBase: h.valueBase },
+          });
+        }
+        await tx.snapshotCashFlow.deleteMany({ where: { snapshotId: snap.id } });
+        if (input.cashFlows.length > 0) {
+          await tx.snapshotCashFlow.createMany({
+            data: input.cashFlows.map((cf) => ({
+              snapshotId: snap.id,
+              category: cf.category,
+              label: cf.label,
+              amount: cf.amount,
+            })),
+          });
+        }
+        await tx.monthlySnapshot.update({
+          where: { id: snap.id },
+          data: {
+            version: { increment: 1 },
+            netWorthBase: metrics.netWorth.toString(),
+            investableAssetsBase: metrics.investableAssets.toString(),
+            cashPositionBase: metrics.cashPosition.toString(),
+            passiveIncomeBase: metrics.passiveIncome.toString(),
+            savingsRate: metrics.savingsRate != null ? metrics.savingsRate.toString() : null,
+          },
+        });
+      });
+
+      return { id: snap.id };
     }),
 });
