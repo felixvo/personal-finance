@@ -38,6 +38,16 @@ export default async function SettingsPage() {
       </section>
 
       <section className="card" style={{ maxWidth: "none", marginBottom: "1rem" }}>
+        <h2 style={{ margin: "0 0 0.4rem", fontSize: "0.95rem" }}>Holding types</h2>
+        <p className="muted" style={{ margin: "0 0 0.9rem", fontSize: "0.85rem" }}>
+          Manage the categories you can assign to holdings during a check-in.
+        </p>
+        <Link className="btn-ghost" href="/settings/holding-types" style={{ textDecoration: "none" }}>
+          Manage holding types
+        </Link>
+      </section>
+
+      <section className="card" style={{ maxWidth: "none", marginBottom: "1rem" }}>
         <h2 style={{ margin: "0 0 0.6rem", fontSize: "0.95rem" }}>Export your data</h2>
         <p className="muted" style={{ margin: "0 0 0.9rem", fontSize: "0.85rem" }}>
           JSON is a complete dump; CSV is the month-by-month metrics table.

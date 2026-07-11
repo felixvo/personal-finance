@@ -2,6 +2,7 @@ import { router, publicProcedure, protectedProcedure } from "../trpc";
 import { authRouter } from "./auth";
 import { householdRouter } from "./household";
 import { holdingRouter } from "./holding";
+import { holdingTypeRouter } from "./holdingType";
 import { checkInRouter } from "./checkin";
 import { snapshotRouter } from "./snapshot";
 import { assetsRouter } from "./assets";
@@ -14,6 +15,7 @@ export const appRouter = router({
   auth: authRouter,
   household: householdRouter,
   holding: holdingRouter,
+  holdingType: holdingTypeRouter,
   checkIn: checkInRouter,
   snapshot: snapshotRouter,
   assets: assetsRouter,
@@ -21,24 +23,6 @@ export const appRouter = router({
 
   health: router({
     ping: publicProcedure.query(() => ({ ok: true as const, time: new Date() })),
-  }),
-
-  holdingType: router({
-    /** Global seed types (household_id IS NULL). Powers Settings + check-in. */
-    listGlobal: publicProcedure.query(({ ctx }) =>
-      ctx.prisma.holdingType.findMany({
-        where: { householdId: null },
-        orderBy: [{ classification: "asc" }, { slug: "asc" }],
-        select: {
-          id: true,
-          slug: true,
-          label: true,
-          classification: true,
-          isInvestable: true,
-          isCash: true,
-        },
-      }),
-    ),
   }),
 
   me: router({
