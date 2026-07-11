@@ -6,6 +6,17 @@
   --accent: #6265d8;
   --border: #e7e5f2;
   --radius: 16px;
+
+  /* categorical chart palette — dataviz reference, validated against --surface */
+  --series-1: #2a78d6;
+  --series-2: #1baf7a;
+  --series-3: #eda100;
+  --series-4: #008300;
+  --series-5: #4a3aa7;
+  --series-6: #e34948;
+  --series-7: #e87ba4;
+  --series-8: #eb6834;
+  --series-other: #898781;
 }
 
 @media (prefers-color-scheme: dark) {
@@ -16,6 +27,16 @@
     --muted: #9b98ad;
     --accent: #9b9ef0;
     --border: #322e40;
+
+    --series-1: #3987e5;
+    --series-2: #199e70;
+    --series-3: #c98500;
+    --series-4: #008300;
+    --series-5: #9085e9;
+    --series-6: #e66767;
+    --series-7: #d55181;
+    --series-8: #d95926;
+    --series-other: #898781;
   }
 }
 
