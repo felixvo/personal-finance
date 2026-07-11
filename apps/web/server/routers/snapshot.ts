@@ -67,6 +67,66 @@ export const snapshotRouter = router({
     }));
   }),
 
+  /**
+   * Chart series for the trend views (Home net-worth line; Assets per-holding
+   * small multiples + stacked composition). The last ≤12 completed snapshots as
+   * aligned arrays: net worth per period, and each active asset holding's base
+   * value per period (0 in a month it wasn't held). Values are plain numbers —
+   * these drive SVG geometry, not ledger math.
+   */
+  trends: householdProcedure.query(async ({ ctx }) => {
+    const snaps = await ctx.prisma.monthlySnapshot.findMany({
+      where: { householdId: ctx.householdId, status: "COMPLETED" },
+      orderBy: { periodMonth: "asc" },
+      include: { holdings: { include: { holding: { include: { holdingType: true } } } } },
+    });
+    const recent = snaps.slice(-12);
+    const periods = recent.map((s) => formatPeriod(s.periodMonth));
+    const netWorth = recent.map((s) => Number(s.netWorthBase?.toString() ?? "0"));
+
+    type Row = {
+      holdingId: string;
+      name: string;
+      typeSlug: string;
+      typeLabel: string;
+      classification: "ASSET" | "LIABILITY";
+      status: string;
+      series: number[];
+    };
+    const byHolding = new Map<string, Row>();
+    recent.forEach((s, i) => {
+      for (const sh of s.holdings) {
+        let row = byHolding.get(sh.holdingId);
+        if (!row) {
+          row = {
+            holdingId: sh.holdingId,
+            name: sh.holding.name,
+            typeSlug: sh.holding.holdingType.slug,
+            typeLabel: sh.holding.holdingType.label,
+            classification: sh.holding.holdingType.classification,
+            status: sh.holding.status,
+            series: new Array<number>(recent.length).fill(0),
+          };
+          byHolding.set(sh.holdingId, row);
+        }
+        row.series[i] = Number(sh.valueBase.toString());
+      }
+    });
+
+    const assets = [...byHolding.values()]
+      .filter((r) => r.classification === "ASSET" && r.status === "ACTIVE")
+      .map((r) => ({
+        holdingId: r.holdingId,
+        name: r.name,
+        typeSlug: r.typeSlug,
+        typeLabel: r.typeLabel,
+        series: r.series,
+      }))
+      .sort((a, b) => (b.series[b.series.length - 1] ?? 0) - (a.series[a.series.length - 1] ?? 0));
+
+    return { periods, netWorth, assets };
+  }),
+
   /** Full read-only detail for one completed snapshot (docs/01 §3.7). */
   getById: householdProcedure
     .input(z.object({ snapshotId: z.string().uuid() }))

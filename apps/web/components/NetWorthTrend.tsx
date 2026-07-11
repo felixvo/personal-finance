@@ -1,0 +1,71 @@
+import { formatMoney, formatMonthShort } from "@/lib/format";
+
+/**
+ * Net worth across the last check-ins — a single-series line chart, so no
+ * legend (the card title names it). Auto-scales to the data range (with a small
+ * pad for a flat series) so the trajectory is visible even when the absolute
+ * numbers are large and close; the end value + period labels give the context.
+ */
+export function NetWorthTrend({
+  periods,
+  values,
+  baseCurrency,
+}: {
+  periods: string[];
+  values: number[];
+  baseCurrency: string;
+}) {
+  if (values.length < 2) {
+    return (
+      <p className="muted" style={{ fontSize: "0.82rem", margin: "0.4rem 0 0" }}>
+        Two completed check-ins are needed to chart a trend.
+      </p>
+    );
+  }
+
+  const W = 600;
+  const H = 190;
+  const pl = 10;
+  const pr = 10;
+  const pt = 20;
+  const pb = 24;
+  let mn = Math.min(...values);
+  let mx = Math.max(...values);
+  if (mx === mn) {
+    const pad = Math.abs(mx) * 0.05 || 1;
+    mn -= pad;
+    mx += pad;
+  }
+  const X = (i: number) => pl + (i / (values.length - 1)) * (W - pl - pr);
+  const Y = (v: number) => pt + (1 - (v - mn) / (mx - mn)) * (H - pt - pb);
+
+  const pts = values.map((v, i) => `${X(i).toFixed(1)},${Y(v).toFixed(1)}`).join(" ");
+  const area = `${X(0).toFixed(1)},${(H - pb).toFixed(1)} ${pts} ${X(values.length - 1).toFixed(1)},${(H - pb).toFixed(1)}`;
+  const last = values[values.length - 1]!;
+
+  return (
+    <svg
+      viewBox={`0 0 ${W} ${H}`}
+      role="img"
+      aria-label="Net worth over time"
+      style={{ width: "100%", height: "auto", display: "block" }}
+    >
+      {[0, 0.5, 1].map((f) => {
+        const gy = pt + (H - pt - pb) * f;
+        return <line key={f} x1={pl} y1={gy} x2={W - pr} y2={gy} stroke="var(--border)" strokeWidth={1} opacity={0.7} />;
+      })}
+      <polygon points={area} fill="var(--accent)" opacity={0.12} />
+      <polyline points={pts} fill="none" stroke="var(--accent)" strokeWidth={2} strokeLinejoin="round" strokeLinecap="round" />
+      <circle cx={X(values.length - 1)} cy={Y(last)} r={4} fill="var(--accent)" stroke="var(--surface)" strokeWidth={2} />
+      <text x={W - pr} y={Math.max(13, Y(last) - 8)} textAnchor="end" fontSize={12} fontWeight={600} fill="var(--ink)">
+        {formatMoney(last, baseCurrency)}
+      </text>
+      <text x={pl} y={H - 7} textAnchor="start" fontSize={11} fill="var(--muted)">
+        {formatMonthShort(periods[0]!)}
+      </text>
+      <text x={W - pr} y={H - 7} textAnchor="end" fontSize={11} fill="var(--muted)">
+        {formatMonthShort(periods[periods.length - 1]!)}
+      </text>
+    </svg>
+  );
+}

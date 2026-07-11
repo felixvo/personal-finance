@@ -3,6 +3,7 @@ import Link from "next/link";
 import { auth, signOut } from "@/auth";
 import { serverCaller } from "@/server/caller";
 import { formatMoney, formatPercent } from "@/lib/format";
+import { NetWorthTrend } from "@/components/NetWorthTrend";
 
 export default async function Home() {
   const session = await auth();
@@ -48,6 +49,7 @@ export default async function Home() {
   // ---- State B: dashboard (a COMPLETED snapshot exists for this period) ----
   if (status.state === "completed-this-month") {
     const { latest, previous } = await caller.snapshot.getDashboard();
+    const trends = await caller.snapshot.trends();
     const delta =
       latest?.netWorth != null && previous?.netWorth != null
         ? Number(latest.netWorth) - Number(previous.netWorth)
@@ -68,7 +70,8 @@ export default async function Home() {
 
     return (
       <main className="center-shell">
-        <div className="card" style={{ maxWidth: "42rem" }}>
+        <div style={{ display: "flex", flexDirection: "column", gap: "1rem", width: "100%", maxWidth: "42rem" }}>
+        <div className="card" style={{ maxWidth: "none" }}>
           {header}
           <h1 className="title">Where {household.name} stands</h1>
           <div
@@ -106,6 +109,14 @@ export default async function Home() {
             <Link href="/goals">Goals</Link> · <Link href="/what-if">What&nbsp;If</Link> ·{" "}
             <Link href="/timeline">Timeline</Link> · <Link href="/settings">Settings</Link>
           </p>
+        </div>
+        <section className="card" style={{ maxWidth: "none" }}>
+          <h2 style={{ margin: "0 0 0.2rem", fontSize: "0.95rem" }}>Net worth over time</h2>
+          <p className="muted" style={{ margin: "0 0 0.75rem", fontSize: "0.8rem" }}>
+            Across your last {trends.periods.length} check-in{trends.periods.length === 1 ? "" : "s"}
+          </p>
+          <NetWorthTrend periods={trends.periods} values={trends.netWorth} baseCurrency={cur} />
+        </section>
         </div>
       </main>
     );

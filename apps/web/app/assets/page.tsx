@@ -3,11 +3,13 @@ import { requireHousehold } from "@/lib/session";
 import { formatMoney } from "@/lib/format";
 import { typeColor, currencyColor } from "@/lib/chart-colors";
 import { AllocationBar } from "./AllocationBar";
+import { AssetTrends } from "@/components/AssetTrends";
 
 export default async function AssetsPage() {
   const { caller, member } = await requireHousehold();
   const cur = member.household.baseCurrency;
   const data = await caller.assets.get();
+  const trends = await caller.snapshot.trends();
 
   if (!data) {
     return (
@@ -56,6 +58,15 @@ export default async function AssetsPage() {
           <AllocationBar items={currencyItems} currency={cur} />
         </section>
       </div>
+
+      <section className="card" style={{ maxWidth: "none", marginTop: "1rem" }}>
+        <h2 style={{ margin: "0 0 0.2rem", fontSize: "0.95rem" }}>How each asset changes over time</h2>
+        <p className="muted" style={{ margin: "0 0 1rem", fontSize: "0.8rem" }}>
+          Across your last {trends.periods.length} check-in{trends.periods.length === 1 ? "" : "s"} — “By asset” gives
+          each holding its own scale; “Stacked total” shows how they compose your assets.
+        </p>
+        <AssetTrends periods={trends.periods} assets={trends.assets} baseCurrency={cur} />
+      </section>
 
       {data.groups.map((g) => (
         <section key={g.slug} className="card" style={{ maxWidth: "none", marginTop: "1rem" }}>
