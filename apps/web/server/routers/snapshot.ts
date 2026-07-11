@@ -3,6 +3,7 @@ import { z } from "zod";
 import { TRPCError } from "@trpc/server";
 import { computeMetrics, valueBase as computeValueBase, Decimal } from "@atlas/calc-engine";
 import { router, householdProcedure } from "../trpc";
+import { markGoalsAchieved } from "./goal";
 import { formatPeriod } from "../period";
 import { moneyString } from "../money";
 
@@ -376,6 +377,7 @@ export const snapshotRouter = router({
         { timeout: 15_000, maxWait: 10_000 },
       );
 
+      await markGoalsAchieved(ctx.prisma, ctx.householdId);
       return { id: snap.id };
     }),
 });

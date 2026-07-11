@@ -3,6 +3,7 @@ import { TRPCError } from "@trpc/server";
 import type { PrismaClient } from "@prisma/client";
 import { computeMetrics, valueBase as computeValueBase, Decimal } from "@atlas/calc-engine";
 import { router, householdProcedure } from "../trpc";
+import { markGoalsAchieved } from "./goal";
 import { moneyString } from "../money";
 import { currentPeriodMonth } from "../period";
 
@@ -282,6 +283,7 @@ export const checkInRouter = router({
           savingsRate: metrics.savingsRate != null ? metrics.savingsRate.toString() : null,
         },
       });
+      await markGoalsAchieved(ctx.prisma, ctx.householdId);
       return { id: snap.id };
     }),
 });

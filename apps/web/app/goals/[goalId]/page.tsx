@@ -60,11 +60,20 @@ export default async function GoalDetailPage({ params }: { params: Promise<{ goa
         </p>
       </section>
 
-      <form action={archiveGoal} style={{ marginTop: "1.25rem" }}>
-        <button className="btn-ghost" type="submit">
-          Archive goal
-        </button>
-      </form>
+      <div style={{ display: "flex", gap: "0.6rem", marginTop: "1.25rem", alignItems: "center" }}>
+        <Link
+          href={`/goals/${goalId}/edit`}
+          className="btn"
+          style={{ width: "auto", padding: "0.5rem 1rem", textDecoration: "none" }}
+        >
+          Edit goal
+        </Link>
+        <form action={archiveGoal}>
+          <button className="btn-ghost" type="submit">
+            Archive goal
+          </button>
+        </form>
+      </div>
     </main>
   );
 }
