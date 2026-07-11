@@ -13,12 +13,16 @@ const TYPE_SELECT = {
   isCash: true,
 } as const;
 
-/** Derive a stable uppercase slug from a human label (docs/03 §6). */
+/**
+ * Derive a stable slug from a human label, matching the lowercase convention of
+ * the global seed types (docs/03 §6) — e.g. "Real Estate" -> "real_estate" — so
+ * the collision check below catches a custom label that duplicates a seed type.
+ */
 function slugify(label: string): string {
   return label
     .trim()
-    .toUpperCase()
-    .replace(/[^A-Z0-9]+/g, "_")
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "_")
     .replace(/^_+|_+$/g, "");
 }
 
