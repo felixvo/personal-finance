@@ -104,7 +104,7 @@ export default async function Home() {
           <p className="muted" style={{ margin: "0.5rem 0 0", fontSize: "0.8rem" }}>
             Checked in for {latest?.periodMonth}. <Link href="/assets">Assets</Link> ·{" "}
             <Link href="/goals">Goals</Link> · <Link href="/what-if">What&nbsp;If</Link> ·{" "}
-            <Link href="/timeline">Timeline</Link>
+            <Link href="/timeline">Timeline</Link> · <Link href="/settings">Settings</Link>
           </p>
         </div>
       </main>
@@ -145,6 +145,9 @@ export default async function Home() {
         <p className="muted" style={{ margin: 0, fontSize: "0.8rem" }}>
           Signed in as {session.user.email} · base currency {household.baseCurrency} · check-in day{" "}
           {household.checkInDay}
+        </p>
+        <p className="muted" style={{ margin: "0.4rem 0 0", fontSize: "0.8rem" }}>
+          <Link href="/what-if">What&nbsp;If</Link> · <Link href="/settings">Settings</Link>
         </p>
       </div>
     </main>
