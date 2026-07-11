@@ -17,6 +17,10 @@
   --series-7: #e87ba4;
   --series-8: #eb6834;
   --series-other: #898781;
+
+  /* status palette — fixed, never themed (dataviz); pair with icon + label */
+  --status-good: #0ca30c;
+  --status-warning: #fab219;
 }
 
 @media (prefers-color-scheme: dark) {

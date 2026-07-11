@@ -6,6 +6,15 @@ import { moneyString } from "../money";
 import { currentPeriodMonth } from "../period";
 
 export const holdingRouter = router({
+  /** Active holdings for this household (powers /assets add + goal subset picker). */
+  list: householdProcedure.query(({ ctx }) =>
+    ctx.prisma.holding.findMany({
+      where: { householdId: ctx.householdId, status: "ACTIVE" },
+      orderBy: { name: "asc" },
+      select: { id: true, name: true, currency: true },
+    }),
+  ),
+
   /** Global seed types + this household's custom types (docs/08 §3.3). */
   listTypes: householdProcedure.query(({ ctx }) =>
     ctx.prisma.holdingType.findMany({

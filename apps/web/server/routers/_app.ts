@@ -5,6 +5,7 @@ import { holdingRouter } from "./holding";
 import { checkInRouter } from "./checkin";
 import { snapshotRouter } from "./snapshot";
 import { assetsRouter } from "./assets";
+import { goalRouter } from "./goal";
 
 /**
  * Root tRPC router. Grows toward the docs/08 surface as Phase 1 features land.
@@ -16,6 +17,7 @@ export const appRouter = router({
   checkIn: checkInRouter,
   snapshot: snapshotRouter,
   assets: assetsRouter,
+  goal: goalRouter,
 
   health: router({
     ping: publicProcedure.query(() => ({ ok: true as const, time: new Date() })),
