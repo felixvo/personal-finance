@@ -40,7 +40,7 @@ export default function SignupPage() {
       <form className="card" onSubmit={onSubmit}>
         <p className="eyebrow">Project Atlas</p>
         <h1 className="title">Create your account</h1>
-        {error && <p className="error">{error}</p>}
+        {error && <p className="error" role="alert">{error}</p>}
         <div className="field">
           <label htmlFor="name">Your name</label>
           <input

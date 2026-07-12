@@ -293,7 +293,7 @@ export function SnapshotEditForm({
 
         {showAdd ? (
           <div style={{ borderTop: "1px solid var(--border)", marginTop: "1rem", paddingTop: "1rem" }}>
-            {hErr && <p className="error">{hErr}</p>}
+            {hErr && <p className="error" role="alert">{hErr}</p>}
             <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(11rem, 1fr))", gap: "0.75rem" }}>
               <div className="field">
                 <label htmlFor="nh-name">Name</label>
@@ -415,7 +415,7 @@ export function SnapshotEditForm({
           <span className="muted">Net worth (preview)</span>
           <span style={{ fontSize: "1.4rem", fontWeight: 700 }}>{formatMoney(preview, baseCurrency)}</span>
         </div>
-        {err && <p className="error">{err}</p>}
+        {err && <p className="error" role="alert">{err}</p>}
         <div style={{ display: "flex", gap: "0.6rem", alignItems: "center" }}>
           <button className="btn" type="submit" disabled={edit.isPending} style={{ width: "auto", padding: "0.55rem 1.1rem" }}>
             {edit.isPending ? "Saving…" : "Save changes"}

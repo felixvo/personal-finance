@@ -159,7 +159,7 @@ export function CheckInWizard({ baseCurrency }: { baseCurrency: string }) {
         )}
 
         <form onSubmit={onAddHolding} style={{ borderTop: "1px solid var(--border)", paddingTop: "1rem" }}>
-          {hErr && <p className="error">{hErr}</p>}
+          {hErr && <p className="error" role="alert">{hErr}</p>}
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "0.75rem" }}>
             <div className="field">
               <label htmlFor="h-name">Name</label>
@@ -254,7 +254,7 @@ export function CheckInWizard({ baseCurrency }: { baseCurrency: string }) {
         )}
 
         <form onSubmit={onAddCashFlow} style={{ borderTop: "1px solid var(--border)", paddingTop: "1rem" }}>
-          {cErr && <p className="error">{cErr}</p>}
+          {cErr && <p className="error" role="alert">{cErr}</p>}
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: "0.75rem" }}>
             <div className="field">
               <label htmlFor="c-cat">Category</label>
@@ -288,7 +288,7 @@ export function CheckInWizard({ baseCurrency }: { baseCurrency: string }) {
           <span className="muted">Net worth (preview)</span>
           <span style={{ fontSize: "1.4rem", fontWeight: 700 }}>{formatMoney(netWorthPreview, baseCurrency)}</span>
         </div>
-        {completeErr && <p className="error">{completeErr}</p>}
+        {completeErr && <p className="error" role="alert">{completeErr}</p>}
         <button
           className="btn"
           type="button"

@@ -31,7 +31,7 @@ export default function LoginPage() {
       <form className="card" onSubmit={onSubmit}>
         <p className="eyebrow">Project Atlas</p>
         <h1 className="title">Welcome back</h1>
-        {error && <p className="error">{error}</p>}
+        {error && <p className="error" role="alert">{error}</p>}
         <div className="field">
           <label htmlFor="email">Email</label>
           <input

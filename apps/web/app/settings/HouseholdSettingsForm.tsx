@@ -37,7 +37,7 @@ export function HouseholdSettingsForm({
 
   return (
     <form onSubmit={onSubmit}>
-      {error && <p className="error">{error}</p>}
+      {error && <p className="error" role="alert">{error}</p>}
       <div className="field">
         <label htmlFor="hh-name">Household name</label>
         <input

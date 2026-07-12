@@ -72,7 +72,7 @@ export function GoalForm({
 
   return (
     <form onSubmit={handleSubmit}>
-      {error && <p className="error">{error}</p>}
+      {error && <p className="error" role="alert">{error}</p>}
       <div className="field">
         <label htmlFor="g-type">Goal type</label>
         <select id="g-type" className="select" value={type} onChange={(e) => onTypeChange(e.target.value as GoalType)}>

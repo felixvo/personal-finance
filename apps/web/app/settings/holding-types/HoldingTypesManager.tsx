@@ -46,7 +46,7 @@ export function HoldingTypesManager({ custom }: { custom: CustomType[] }) {
     <>
       <section className="card" style={{ maxWidth: "none", marginTop: "1rem" }}>
         <h2 style={{ margin: "0 0 0.6rem", fontSize: "0.95rem" }}>Your custom types</h2>
-        {error && <p className="error">{error}</p>}
+        {error && <p className="error" role="alert">{error}</p>}
         {custom.length === 0 ? (
           <p className="muted" style={{ margin: 0, fontSize: "0.85rem" }}>
             None yet — add one below.
