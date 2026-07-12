@@ -63,6 +63,7 @@ export function AssetTrends({
           <button
             key={m}
             type="button"
+            aria-pressed={mode === m}
             onClick={() => setMode(m)}
             className={mode === m ? "btn" : "btn-ghost"}
             style={{ width: "auto", padding: "0.3rem 0.85rem", fontSize: "0.8rem", borderRadius: 999 }}

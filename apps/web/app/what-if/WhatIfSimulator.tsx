@@ -190,6 +190,7 @@ export function WhatIfSimulator({
           <button
             key={t.value}
             type="button"
+            aria-pressed={t.value === type}
             onClick={() => setType(t.value)}
             className={t.value === type ? "btn" : "btn-ghost"}
             style={{ width: "auto", padding: "0.4rem 0.9rem", fontSize: "0.85rem" }}
