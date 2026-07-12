@@ -160,7 +160,7 @@ export function CheckInWizard({ baseCurrency }: { baseCurrency: string }) {
 
         <form onSubmit={onAddHolding} style={{ borderTop: "1px solid var(--border)", paddingTop: "1rem" }}>
           {hErr && <p className="error" role="alert">{hErr}</p>}
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "0.75rem" }}>
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(11rem, 1fr))", gap: "0.75rem" }}>
             <div className="field">
               <label htmlFor="h-name">Name</label>
               <input id="h-name" className="input" required value={hName} onChange={(e) => setHName(e.target.value)} placeholder="Vietcombank checking" />
@@ -255,7 +255,7 @@ export function CheckInWizard({ baseCurrency }: { baseCurrency: string }) {
 
         <form onSubmit={onAddCashFlow} style={{ borderTop: "1px solid var(--border)", paddingTop: "1rem" }}>
           {cErr && <p className="error" role="alert">{cErr}</p>}
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: "0.75rem" }}>
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(9rem, 1fr))", gap: "0.75rem" }}>
             <div className="field">
               <label htmlFor="c-cat">Category</label>
               <select id="c-cat" className="select" value={cCat} onChange={(e) => setCCat(e.target.value)}>
@@ -348,7 +348,8 @@ function HoldingRow({
         display: "flex",
         justifyContent: "space-between",
         alignItems: "center",
-        gap: "1rem",
+        flexWrap: "wrap",
+        gap: "0.6rem 1rem",
         border: "1px solid var(--border)",
         borderRadius: "10px",
         padding: "0.55rem 0.8rem",
@@ -366,7 +367,7 @@ function HoldingRow({
           → {formatMoney(Number(h.valueBase), baseCurrency)}
         </div>
       </div>
-      <div style={{ display: "flex", alignItems: "center", gap: "0.4rem" }}>
+      <div style={{ display: "flex", alignItems: "center", flexWrap: "wrap", justifyContent: "flex-end", gap: "0.4rem" }}>
         <input
           className="input"
           inputMode="decimal"
@@ -374,7 +375,7 @@ function HoldingRow({
           onChange={(e) => setValue(e.target.value)}
           onBlur={commit}
           aria-label={`${h.name} value`}
-          style={{ width: "7.5rem", padding: "0.35rem 0.5rem" }}
+          style={{ width: "7.5rem", maxWidth: "100%", padding: "0.35rem 0.5rem" }}
         />
         <span className="muted" style={{ fontSize: "0.8rem" }}>
           {h.currency}

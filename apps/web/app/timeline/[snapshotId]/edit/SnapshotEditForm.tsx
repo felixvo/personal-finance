@@ -182,7 +182,8 @@ export function SnapshotEditForm({
     display: "flex",
     justifyContent: "space-between",
     alignItems: "center",
-    gap: "0.75rem",
+    flexWrap: "wrap",
+    gap: "0.6rem 0.75rem",
     border: "1px solid var(--border)",
     borderRadius: "10px",
     padding: "0.55rem 0.8rem",
@@ -222,7 +223,7 @@ export function SnapshotEditForm({
                   </span>
                 </div>
               </div>
-              <div style={{ display: "flex", alignItems: "center", gap: "0.4rem" }}>
+              <div style={{ display: "flex", alignItems: "center", flexWrap: "wrap", justifyContent: "flex-end", gap: "0.4rem" }}>
                 <input
                   className="input"
                   inputMode="decimal"
@@ -260,7 +261,7 @@ export function SnapshotEditForm({
                   </span>
                 </div>
               </div>
-              <div style={{ display: "flex", alignItems: "center", gap: "0.4rem" }}>
+              <div style={{ display: "flex", alignItems: "center", flexWrap: "wrap", justifyContent: "flex-end", gap: "0.4rem" }}>
                 <input
                   className="input"
                   inputMode="decimal"
